@@ -1,0 +1,19 @@
+version: '3.1'
+services:
+  injector-test:
+    build:
+      context: ./test/injector 
+  sink-test:
+    build:
+      context: ./test/sink
+  carbon-relay-ng:
+    build:
+      context: ./
+    volumes:
+      - ./test/carbon-relay-ng/:/conf/
+  promtheus:
+    image: "prom/prometheus"
+    volumes:
+      - "./test/prometheus:/etc/prometheus"
+    ports:
+      - 9090:9090
