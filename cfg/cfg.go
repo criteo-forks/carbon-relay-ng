@@ -81,7 +81,8 @@ type Route struct {
 	Topic       string   `toml:"topic,omitempty"` // also used by Google PubSub
 	Codec       string   `toml:"codec,omitempty"` // also used by Google PubSub
 	PartitionBy string   `toml:"partition_by,omitempty"`
-
+	MaxRetries	int		 `toml:"max_retries,omitempty"`
+	RequiredAcks string  `toml:"required_acks,omitempty"`
 	// Google PubSub
 	Project      string `toml:"project,omitempty"`
 	Format       string `toml:"format,omitempty"`
