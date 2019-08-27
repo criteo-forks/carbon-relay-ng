@@ -72,21 +72,22 @@ func (c *ListenerConfig) Build() (input.Input, error) {
 
 // for more informations about the fields, go look at https://github.com/segmentio/kafka-go/blob/master/reader.go#L291
 type KafkaConfig struct {
-	baseInputConfig  `mapstructure:",squash"`
-	ID               string        `mapstructure:"client_id,omitempty"`
-	Brokers          []string      `mapstructure:"brokers,omitempty"`
-	Topic            string        `mapstructure:"topic,omitempty"`
-	ConsumerGroupID  string        `mapstructure:"consumer_group_id,omitempty"`
-	QueueCapacity    int           `mapstructure:"queue_capacity,omitempty"`
-	MinBytes         int           `mapstructure:"min_bytes,omitempty"`
-	MaxBytes         int           `mapstructure:"max_bytes,omitempty"`
-	CommitInterval   time.Duration `mapstructure:"commit_interval,omitempty"`
-	SessionTimeout   time.Duration `mapstructure:"session_timeout,omitempty"`
-	RebalanceTimeout time.Duration `mapstructure:"rebalance_timeout,omitempty"`
-	BackoffMin       time.Duration `mapstructure:"backoff_min,omitempty"`
-	BackoffMax       time.Duration `mapstructure:"backoff_max,omitempty"`
-	MaxAttempts      int           `mapstructure:"max_attempts,omitempty"`
-	ReturnErrors     bool          `mapstructure:"return_errors,omitempty"`
+	baseInputConfig     `mapstructure:",squash"`
+	ID                  string        `mapstructure:"client_id,omitempty"`
+	Brokers             []string      `mapstructure:"brokers,omitempty"`
+	Topic               string        `mapstructure:"topic,omitempty"`
+	ConsumerGroupID     string        `mapstructure:"consumer_group_id,omitempty"`
+	QueueCapacity       int           `mapstructure:"queue_capacity,omitempty"`
+	MinBytes            int           `mapstructure:"min_bytes,omitempty"`
+	MaxBytes            int           `mapstructure:"max_bytes,omitempty"`
+	CommitInterval      time.Duration `mapstructure:"commit_interval,omitempty"`
+	SessionTimeout      time.Duration `mapstructure:"session_timeout,omitempty"`
+	RebalanceTimeout    time.Duration `mapstructure:"rebalance_timeout,omitempty"`
+	BackoffMin          time.Duration `mapstructure:"backoff_min,omitempty"`
+	BackoffMax          time.Duration `mapstructure:"backoff_max,omitempty"`
+	MaxAttempts         int           `mapstructure:"max_attempts,omitempty"`
+	ReturnErrors        bool          `mapstructure:"return_errors,omitempty"`
+	InitialOffsetOldest bool          `mapstructure:"initial_offset_oldest,omitempty"`
 }
 
 func (c *KafkaConfig) Build() (input.Input, error) {
@@ -158,7 +159,10 @@ func (c *KafkaConfig) Build() (input.Input, error) {
 
 	kafkaConfig.ClientID = c.ID
 
-	kafkaConfig.Consumer.Offsets.Initial = sarama.OffsetNewest
+	if c.InitialOffsetOldest {
+		kafkaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+	}
+
 	kafkaConfig.Version = sarama.V2_2_0_0
 
 	h, err := c.Handler()
