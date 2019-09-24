@@ -688,7 +688,6 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 			}
 			table.AddRoute(route)
 		case "kafka":
-
 			kafkaCfg := routeConfig.Kafka
 			if kafkaCfg == nil {
 				return fmt.Errorf("error adding route '%s': kafka config is not specified", routeConfig.Key)
@@ -741,7 +740,34 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 
 			route, err := route.NewKafkaRoute(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, writerConfig, routingMutator)
 			table.AddRoute(route)
+		case "bg_metadata":
+			bgMetadataCfg := routeConfig.BgMetadata
+			if bgMetadataCfg == nil {
+				return fmt.Errorf("error adding route '%s': bg_metadata config is not specified", routeConfig.Key)
+			}
+			if bgMetadataCfg.ShardingFactor == 0 {
+				return fmt.Errorf("error adding route '%s': sharding factor must be specified", routeConfig.Key)
+			}
+			if bgMetadataCfg.FilterSize == 0 {
+				return fmt.Errorf("error adding route '%s': filter size must be specified", routeConfig.Key)
+			}
+			if bgMetadataCfg.FaultTolerance == 0 {
+				return fmt.Errorf("error adding route '%s': fault tolerance percentage must be specified", routeConfig.Key)
+			}
+			if bgMetadataCfg.FaultTolerance < 0 || bgMetadataCfg.FaultTolerance > 1 {
+				return fmt.Errorf("error adding route '%s': fault tolerance value must be between 0 and 1", routeConfig.Key)
+			}
 
+			bloomFilterCfg := &route.BloomFilterConfig{
+				N: bgMetadataCfg.FilterSize,
+				P: bgMetadataCfg.FaultTolerance,
+			}
+
+			route, err := route.NewBgMetadataRoute(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, bgMetadataCfg.ShardingFactor, bloomFilterCfg)
+			if err != nil {
+				return fmt.Errorf("error adding route '%s': %s", routeConfig.Key, err)
+			}
+			table.AddRoute(route)
 		default:
 			return fmt.Errorf("unrecognized route type '%s'", routeConfig.Type)
 		}
