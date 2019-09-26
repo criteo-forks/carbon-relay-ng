@@ -758,12 +758,39 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				return fmt.Errorf("error adding route '%s': fault tolerance value must be between 0 and 1", routeConfig.Key)
 			}
 
+			if bgMetadataCfg.ClearInterval == "" {
+				return fmt.Errorf("error adding route '%s': clear interval value must be specified", routeConfig.Key)
+			}
+
+			clearInterval, err := time.ParseDuration(bgMetadataCfg.ClearInterval)
+			if err != nil {
+				return fmt.Errorf("error adding route '%s': could not parse clear_interval", routeConfig.Key)
+			}
+
+			clearWait, err := time.ParseDuration(bgMetadataCfg.ClearWait)
+			if err != nil && bgMetadataCfg.ClearWait != "" {
+				return fmt.Errorf("error adding route '%s': could not parse clear_wait", routeConfig.Key)
+			}
+
+			if clearWait > clearInterval/time.Duration(bgMetadataCfg.ShardingFactor) {
+				return fmt.Errorf("error adding route '%s': clear wait value must be less than clear_interval / sharding_factor", routeConfig.Key)
+			}
+
 			bloomFilterCfg := &route.BloomFilterConfig{
 				N: bgMetadataCfg.FilterSize,
 				P: bgMetadataCfg.FaultTolerance,
 			}
 
-			route, err := route.NewBgMetadataRoute(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, bgMetadataCfg.ShardingFactor, bloomFilterCfg)
+			route, err := route.NewBgMetadataRoute(
+				routeConfig.Key,
+				routeConfig.Prefix,
+				routeConfig.Substr,
+				routeConfig.Regex,
+				bgMetadataCfg.ShardingFactor,
+				clearInterval,
+				clearWait,
+				bloomFilterCfg,
+			)
 			if err != nil {
 				return fmt.Errorf("error adding route '%s': %s", routeConfig.Key, err)
 			}

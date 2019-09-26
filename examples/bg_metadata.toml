@@ -19,3 +19,4 @@ type = 'bg_metadata'
     sharding_factor = 100
     filter_size = 1000000
     fault_tolerance = 0.0000001
+    clear_interval = "60s"
