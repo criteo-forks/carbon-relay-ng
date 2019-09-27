@@ -777,8 +777,11 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 			}
 
 			bloomFilterCfg := &route.BloomFilterConfig{
-				N: bgMetadataCfg.FilterSize,
-				P: bgMetadataCfg.FaultTolerance,
+				N:              bgMetadataCfg.FilterSize,
+				P:              bgMetadataCfg.FaultTolerance,
+				ShardingFactor: bgMetadataCfg.ShardingFactor,
+				ClearInterval:  clearInterval,
+				ClearWait:      clearWait,
 			}
 
 			route, err := route.NewBgMetadataRoute(
@@ -786,9 +789,6 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				routeConfig.Prefix,
 				routeConfig.Substr,
 				routeConfig.Regex,
-				bgMetadataCfg.ShardingFactor,
-				clearInterval,
-				clearWait,
 				bloomFilterCfg,
 			)
 			if err != nil {

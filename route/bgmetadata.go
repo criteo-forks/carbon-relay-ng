@@ -20,43 +20,45 @@ type shard struct {
 
 // BloomFilterConfig contains filter size and false positive chance for all bloom filters
 type BloomFilterConfig struct {
-	N uint
-	P float64
+	N              uint
+	P              float64
+	ShardingFactor int
+	ClearInterval  time.Duration
+	ClearWait      time.Duration
 }
 
 // BgMetadata contains data required to start, stop and reset a metric metadata producer.
 type BgMetadata struct {
 	baseRoute
-	shards        []shard
-	ctx           context.Context
-	cancel        context.CancelFunc
-	wg            sync.WaitGroup
-	clearInterval time.Duration
-	clearWait     time.Duration
+	shards []shard
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+	bfCfg  BloomFilterConfig
 }
 
 // NewBgMetadataRoute creates BgMetadata, starts sharding and filtering incoming metrics.
 // Runs a goroutines for each shard to handle incoming metrics and periodic cleanup of bloom filters
-func NewBgMetadataRoute(key, prefix, sub, regex string, shardingFactor int, clearInterval, clearWait time.Duration, bloomFilterCfg *BloomFilterConfig) (*BgMetadata, error) {
+func NewBgMetadataRoute(key, prefix, sub, regex string, bfCfg *BloomFilterConfig) (*BgMetadata, error) {
 	m := BgMetadata{
-		baseRoute:     *newBaseRoute(key, "bg_metadata"),
-		shards:        make([]shard, shardingFactor),
-		clearInterval: clearInterval,
+		baseRoute: *newBaseRoute(key, "bg_metadata"),
+		shards:    make([]shard, bfCfg.ShardingFactor),
+		bfCfg:     *bfCfg,
 	}
 
-	if clearWait != 0 {
-		m.clearWait = clearWait
+	if bfCfg.ClearWait != 0 {
+		m.bfCfg.ClearWait = bfCfg.ClearWait
 	} else {
-		m.clearWait = clearInterval / time.Duration(shardingFactor)
-		m.logger.Info(fmt.Sprintf("setting clear_wait value to %s", m.clearWait.String()))
+		m.bfCfg.ClearWait = bfCfg.ClearInterval / time.Duration(bfCfg.ShardingFactor)
+		m.logger.Info(fmt.Sprintf("setting clear_wait value to %s", m.bfCfg.ClearWait.String()))
 	}
 
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 
 	// init every shard with filter and channel
-	for shardNum := 0; shardNum < shardingFactor; shardNum++ {
+	for shardNum := 0; shardNum < bfCfg.ShardingFactor; shardNum++ {
 		m.shards[shardNum] = shard{
-			filter:  *bloom.NewWithEstimates(bloomFilterCfg.N, bloomFilterCfg.P),
+			filter:  *bloom.NewWithEstimates(bfCfg.N, bfCfg.P),
 			channel: make(chan []byte, 500),
 		}
 		go m.handleMetric(shardNum)
@@ -103,7 +105,7 @@ func (m *BgMetadata) clearBloomFilter() {
 	m.logger.Info("starting bloom filter clear goroutine")
 	m.wg.Add(1)
 	defer m.wg.Done()
-	t := time.NewTicker(m.clearInterval)
+	t := time.NewTicker(m.bfCfg.ClearInterval)
 	defer t.Stop()
 
 	for {
@@ -116,7 +118,7 @@ func (m *BgMetadata) clearBloomFilter() {
 				m.shards[i].filter.ClearAll()
 				m.logger.Debug(fmt.Sprintf("clearing all filters for shard %d", i+1))
 				m.shards[i].lock.Unlock()
-				time.Sleep(m.clearWait)
+				time.Sleep(m.bfCfg.ClearWait)
 			}
 		}
 	}
