@@ -2,10 +2,19 @@ package route
 
 import (
 	"context"
+	"encoding/gob"
+	"errors"
+	"fmt"
 	"hash/crc32"
+	"io/ioutil"
+	"os"
+	"path"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/graphite-ng/carbon-relay-ng/encoding"
 	"github.com/graphite-ng/carbon-relay-ng/matcher"
 	"github.com/graphite-ng/carbon-relay-ng/metrics"
@@ -20,11 +29,12 @@ type shard struct {
 
 // BloomFilterConfig contains filter size and false positive chance for all bloom filters
 type BloomFilterConfig struct {
-	n              uint
-	p              float64
-	shardingFactor int
-	clearInterval  time.Duration
-	clearWait      time.Duration
+	N              uint
+	P              float64
+	ShardingFactor int
+	Cache          string
+	ClearInterval  time.Duration
+	ClearWait      time.Duration
 	logger         *zap.Logger
 }
 
@@ -40,20 +50,21 @@ type BgMetadata struct {
 }
 
 // NewBloomFilterConfig creates a new BloomFilterConfig
-func NewBloomFilterConfig(n uint, p float64, shardingFactor int, clearInterval, clearWait time.Duration) (BloomFilterConfig, error) {
+func NewBloomFilterConfig(n uint, p float64, shardingFactor int, cache string, clearInterval, clearWait time.Duration) (BloomFilterConfig, error) {
 	bfc := BloomFilterConfig{
-		n:              n,
-		p:              p,
-		shardingFactor: shardingFactor,
-		clearInterval:  clearInterval,
-		clearWait:      clearWait,
+		N:              n,
+		P:              p,
+		ShardingFactor: shardingFactor,
+		Cache:          cache,
+		ClearInterval:  clearInterval,
+		ClearWait:      clearWait,
 		logger:         zap.L(),
 	}
 	if clearWait != 0 {
-		bfc.clearWait = clearWait
+		bfc.ClearWait = clearWait
 	} else {
-		bfc.clearWait = clearInterval / time.Duration(shardingFactor)
-		bfc.logger.Debug("overiding clear_wait value", zap.Duration("clear_wait", bfc.clearWait))
+		bfc.ClearWait = clearInterval / time.Duration(shardingFactor)
+		bfc.logger.Warn("overiding clear_wait value", zap.Duration("clear_wait", bfc.ClearWait))
 	}
 	return bfc, nil
 }
@@ -62,17 +73,50 @@ func NewBloomFilterConfig(n uint, p float64, shardingFactor int, clearInterval, 
 func NewBgMetadataRoute(key, prefix, sub, regex string, bfCfg BloomFilterConfig) (*BgMetadata, error) {
 	m := BgMetadata{
 		baseRoute: *newBaseRoute(key, "bg_metadata"),
-		shards:    make([]shard, bfCfg.shardingFactor),
+		shards:    make([]shard, bfCfg.ShardingFactor),
 		bfCfg:     bfCfg,
+	}
+	if m.bfCfg.Cache != "" {
+		err := m.createCacheDirectory()
+		if err != nil {
+			return &m, err
+		}
+		err = m.validatePreviousFilterConfig()
+		if err != nil {
+			m.logger.Warn("cache validation failed", zap.Error(err))
+			err = m.deleteCache()
+			if err != nil {
+				return &m, err
+			}
+			err = m.saveFilterConfig()
+			if err != nil {
+				return &m, err
+			}
+		} else {
+			for shardNum := 0; shardNum < bfCfg.ShardingFactor; shardNum++ {
+				file, err := os.Open(filepath.Join(m.bfCfg.Cache, fmt.Sprintf("shard%d.state", shardNum)))
+				if err != nil {
+					// skip state loading if file doesn't exist or cannot be loaded instead of failing
+					m.logger.Warn("cannot load state file", zap.Int("shard", shardNum), zap.Error(err))
+					continue
+				}
+				defer file.Close()
+				m.logger.Debug("decoding shard state file", zap.String("filename", file.Name()))
+				err = gob.NewDecoder(file).Decode(&m.shards[shardNum].filter)
+				if err != nil {
+					return &m, err
+				}
+			}
+		}
 	}
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 
 	m.mm = metrics.NewBgMetadataMetrics(key)
 	m.rm = metrics.NewRouteMetrics(key, "bg_metadata", nil)
 	// init every shard with filter
-	for shardNum := 0; shardNum < bfCfg.shardingFactor; shardNum++ {
+	for shardNum := 0; shardNum < bfCfg.ShardingFactor; shardNum++ {
 		m.shards[shardNum] = shard{
-			filter: *bloom.NewWithEstimates(bfCfg.n, bfCfg.p),
+			filter: *bloom.NewWithEstimates(bfCfg.N, bfCfg.P),
 		}
 	}
 
@@ -92,9 +136,8 @@ func (m *BgMetadata) clearBloomFilter() {
 	m.logger.Debug("starting goroutine for bloom filter cleanup")
 	m.wg.Add(1)
 	defer m.wg.Done()
-	t := time.NewTicker(m.bfCfg.clearInterval)
+	t := time.NewTicker(m.bfCfg.ClearInterval)
 	defer t.Stop()
-
 	for {
 		select {
 		case <-m.ctx.Done():
@@ -102,20 +145,96 @@ func (m *BgMetadata) clearBloomFilter() {
 			return
 		case <-t.C:
 			for i := range m.shards {
+				// use array index to not copy lock
+				sh := &m.shards[i]
 				select {
 				case <-m.ctx.Done():
 					t.Stop()
 					return
 				default:
-					m.shards[i].lock.Lock()
-					m.shards[i].filter.ClearAll()
+					sh.lock.Lock()
+					stateFile, err := os.Create(filepath.Join(m.bfCfg.Cache, fmt.Sprintf("shard%d.state", i)))
+					if err != nil {
+						m.logger.Error("cannot save shard state to filesystem", zap.Error(err))
+					}
+					defer stateFile.Close()
+					err = gob.NewEncoder(stateFile).Encode(&sh.filter)
+					if err != nil {
+						m.logger.Error("cannot gob encode shard filter state", zap.Error(err))
+					}
+					sh.filter.ClearAll()
 					m.logger.Debug("clearing filter for shard", zap.Int("shard_number", i+1))
-					m.shards[i].lock.Unlock()
-					time.Sleep(m.bfCfg.clearWait)
+					sh.lock.Unlock()
+					time.Sleep(m.bfCfg.ClearWait)
 				}
 			}
 		}
 	}
+}
+
+func (m *BgMetadata) saveFilterConfig() error {
+	configPath := filepath.Join(m.bfCfg.Cache, "bloom_filter_config")
+	file, err := os.Create(configPath)
+	if err != nil {
+		m.logger.Warn("cannot save bloom filter config to filesystem", zap.Error(err))
+		return err
+	}
+	defer file.Close()
+	m.logger.Info("saving current filter config", zap.String("file", configPath))
+	return gob.NewEncoder(file).Encode(&m.bfCfg)
+}
+
+func (m *BgMetadata) validatePreviousFilterConfig() error {
+	configPath := filepath.Join(m.bfCfg.Cache, "bloom_filter_config")
+	file, err := os.Open(configPath)
+	if err != nil {
+		m.logger.Warn("cannot read bloom filter config", zap.Error(err))
+		return err
+	}
+	defer file.Close()
+	loadedConfig := BloomFilterConfig{}
+	err = gob.NewDecoder(file).Decode(&loadedConfig)
+	if err != nil {
+		m.logger.Warn("cannot decode bloom filter config", zap.Error(err))
+		return err
+	}
+	if cmp.Equal(loadedConfig, m.bfCfg, cmpopts.IgnoreUnexported(BloomFilterConfig{})) {
+		m.logger.Info("cached bloom filter config matches current")
+		m.bfCfg = loadedConfig
+		return nil
+	}
+	return errors.New("cached config does not match current config")
+}
+
+func (m *BgMetadata) createCacheDirectory() error {
+	f, err := os.Stat(m.bfCfg.Cache)
+	if err != nil {
+		if os.IsNotExist(err) {
+			m.logger.Info("creating directory for cache", zap.String("path", m.bfCfg.Cache))
+			os.MkdirAll(m.bfCfg.Cache, os.ModePerm)
+			return nil
+		}
+		m.logger.Error("cannot not check cache directory", zap.String("path", m.bfCfg.Cache))
+		return err
+	}
+	if !f.IsDir() {
+		m.logger.Error("cache path already exists but is not a directory", zap.String("path", m.bfCfg.Cache))
+		return err
+	}
+	m.logger.Info("cache path already exists", zap.String("path", m.bfCfg.Cache))
+	return nil
+}
+
+func (m *BgMetadata) deleteCache() error {
+	m.logger.Warn("deleting cached state and configuration files", zap.String("path", m.bfCfg.Cache))
+	names, err := ioutil.ReadDir(m.bfCfg.Cache)
+	if err != nil {
+		return err
+	}
+	for _, entry := range names {
+		os.RemoveAll(path.Join([]string{m.bfCfg.Cache, entry.Name()}...))
+	}
+	return nil
 }
 
 // Shutdown cancels the context used in BgMetadata and goroutines
@@ -133,18 +252,16 @@ func (m *BgMetadata) Shutdown() error {
 func (m *BgMetadata) Dispatch(dp encoding.Datapoint) {
 	// increase incoming metric prometheus counter
 	m.rm.InMetrics.Inc()
-	shardNum := crc32.ChecksumIEEE([]byte(dp.Name)) % uint32(m.bfCfg.shardingFactor)
+	shardNum := crc32.ChecksumIEEE([]byte(dp.Name)) % uint32(m.bfCfg.ShardingFactor)
 	shard := &m.shards[shardNum]
 	shard.lock.Lock()
 	if !shard.filter.TestString(dp.Name) {
 		shard.filter.AddString(dp.Name)
 		m.mm.AddedMetrics.Inc()
 		// do nothing for now
-		m.logger.Debug("adding new metric to bloom filter", zap.String("name", dp.Name))
 	} else {
 		// don't output metrics already in the filter
 		m.mm.FilteredMetrics.Inc()
-		m.logger.Debug("skipping metric already present in bloom filter", zap.String("name", dp.Name))
 	}
 	shard.lock.Unlock()
 	return

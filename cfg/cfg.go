@@ -129,6 +129,7 @@ type BgMetadataRouteConfig struct {
 	FaultTolerance float64 `toml:"fault_tolerance,omitempty"` // value 0.0 - 1.0
 	ClearInterval  string  `toml:"clear_interval,omitempty"`  // frequency of filter clearing
 	ClearWait      string  `toml:"clear_wait,omitempty"`      // wait time between each filter clear
+	Cache          string  `toml:"cache,omitempty"`           // location of filter storage on disk; feature not enabled if path not provided
 }
 
 type Rewriter struct {

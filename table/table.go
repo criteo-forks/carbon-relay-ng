@@ -780,6 +780,7 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				bgMetadataCfg.FilterSize,
 				bgMetadataCfg.FaultTolerance,
 				bgMetadataCfg.ShardingFactor,
+				bgMetadataCfg.Cache,
 				clearInterval,
 				clearWait,
 			)

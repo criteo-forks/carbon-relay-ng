@@ -20,3 +20,4 @@ type = 'bg_metadata'
     filter_size = 1000000
     fault_tolerance = 0.0000001
     clear_interval = "60s"
+    cache = "/tmp/carbon-relay-ng/cache"

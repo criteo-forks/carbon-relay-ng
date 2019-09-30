@@ -12,7 +12,7 @@ require (
 	github.com/eapache/go-resiliency v1.2.0 // indirect
 	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/frankban/quicktest v1.4.1 // indirect
-	github.com/google/go-cmp v0.3.1 // indirect
+	github.com/google/go-cmp v0.3.1
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.3
 	github.com/jcmturner/gofork v1.0.0 // indirect
