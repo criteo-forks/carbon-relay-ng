@@ -776,12 +776,15 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				return fmt.Errorf("error adding route '%s': clear wait value must be less than clear_interval / sharding_factor", routeConfig.Key)
 			}
 
-			bloomFilterCfg := &route.BloomFilterConfig{
-				N:              bgMetadataCfg.FilterSize,
-				P:              bgMetadataCfg.FaultTolerance,
-				ShardingFactor: bgMetadataCfg.ShardingFactor,
-				ClearInterval:  clearInterval,
-				ClearWait:      clearWait,
+			bloomFilterConfig, err := route.NewBloomFilterConfig(
+				bgMetadataCfg.FilterSize,
+				bgMetadataCfg.FaultTolerance,
+				bgMetadataCfg.ShardingFactor,
+				clearInterval,
+				clearWait,
+			)
+			if err != nil {
+				return fmt.Errorf("error adding route '%s': %s", routeConfig.Key, err)
 			}
 
 			route, err := route.NewBgMetadataRoute(
@@ -789,7 +792,7 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				routeConfig.Prefix,
 				routeConfig.Substr,
 				routeConfig.Regex,
-				bloomFilterCfg,
+				bloomFilterConfig,
 			)
 			if err != nil {
 				return fmt.Errorf("error adding route '%s': %s", routeConfig.Key, err)

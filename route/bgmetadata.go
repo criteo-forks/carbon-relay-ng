@@ -2,7 +2,6 @@ package route
 
 import (
 	"context"
-	"fmt"
 	"hash/crc32"
 	"sync"
 	"time"
@@ -10,21 +9,24 @@ import (
 	"github.com/graphite-ng/carbon-relay-ng/encoding"
 	"github.com/graphite-ng/carbon-relay-ng/matcher"
 	"github.com/willf/bloom"
+	"go.uber.org/zap"
 )
 
 type shard struct {
 	filter  bloom.BloomFilter
-	channel chan []byte
+	channel chan string
 	lock    sync.RWMutex
 }
 
 // BloomFilterConfig contains filter size and false positive chance for all bloom filters
 type BloomFilterConfig struct {
-	N              uint
-	P              float64
-	ShardingFactor int
-	ClearInterval  time.Duration
-	ClearWait      time.Duration
+	n              uint
+	p              float64
+	shardingFactor int
+	bufferSize     int
+	clearInterval  time.Duration
+	clearWait      time.Duration
+	logger         *zap.Logger
 }
 
 // BgMetadata contains data required to start, stop and reset a metric metadata producer.
@@ -37,29 +39,40 @@ type BgMetadata struct {
 	bfCfg  BloomFilterConfig
 }
 
+// NewBloomFilterConfig creates a new BloomFilterConfig
+func NewBloomFilterConfig(n uint, p float64, shardingFactor int, clearInterval, clearWait time.Duration) (*BloomFilterConfig, error) {
+	bfc := BloomFilterConfig{
+		n:              n,
+		p:              p,
+		shardingFactor: shardingFactor,
+		bufferSize:     500,
+		clearInterval:  clearInterval,
+		clearWait:      clearWait,
+		logger:         zap.L(),
+	}
+	if clearWait != 0 {
+		bfc.clearWait = clearWait
+	} else {
+		bfc.clearWait = clearInterval / time.Duration(shardingFactor)
+		bfc.logger.Debug("overiding clear_wait value", zap.Duration("clear_wait", bfc.clearWait))
+	}
+	return &bfc, nil
+}
+
 // NewBgMetadataRoute creates BgMetadata, starts sharding and filtering incoming metrics.
 // Runs a goroutines for each shard to handle incoming metrics and periodic cleanup of bloom filters
 func NewBgMetadataRoute(key, prefix, sub, regex string, bfCfg *BloomFilterConfig) (*BgMetadata, error) {
 	m := BgMetadata{
 		baseRoute: *newBaseRoute(key, "bg_metadata"),
-		shards:    make([]shard, bfCfg.ShardingFactor),
+		shards:    make([]shard, bfCfg.shardingFactor),
 		bfCfg:     *bfCfg,
 	}
-
-	if bfCfg.ClearWait != 0 {
-		m.bfCfg.ClearWait = bfCfg.ClearWait
-	} else {
-		m.bfCfg.ClearWait = bfCfg.ClearInterval / time.Duration(bfCfg.ShardingFactor)
-		m.logger.Info(fmt.Sprintf("setting clear_wait value to %s", m.bfCfg.ClearWait.String()))
-	}
-
 	m.ctx, m.cancel = context.WithCancel(context.Background())
-
 	// init every shard with filter and channel
-	for shardNum := 0; shardNum < bfCfg.ShardingFactor; shardNum++ {
+	for shardNum := 0; shardNum < bfCfg.shardingFactor; shardNum++ {
 		m.shards[shardNum] = shard{
-			filter:  *bloom.NewWithEstimates(bfCfg.N, bfCfg.P),
-			channel: make(chan []byte, 500),
+			filter:  *bloom.NewWithEstimates(bfCfg.n, bfCfg.p),
+			channel: make(chan string, bfCfg.bufferSize),
 		}
 		go m.handleMetric(shardNum)
 	}
@@ -80,52 +93,56 @@ func NewBgMetadataRoute(key, prefix, sub, regex string, bfCfg *BloomFilterConfig
 func (m *BgMetadata) handleMetric(shardNum int) {
 	m.wg.Add(1)
 	defer m.wg.Done()
-	m.logger.Debug(fmt.Sprintf("starting metric handler for shard %d", shardNum+1))
+	m.logger.Debug("starting goroutine for handling received metrics", zap.Int("shard_number", shardNum))
+	shard := &m.shards[shardNum]
 	for {
 		select {
 		case <-m.ctx.Done():
-			close(m.shards[shardNum].channel)
+			close(shard.channel)
 			return
-		case metric := <-m.shards[shardNum].channel:
-			if !m.shards[shardNum].filter.Test(metric) {
-				m.shards[shardNum].filter.Add(metric)
+		case metric := <-shard.channel:
+			if !shard.filter.TestString(metric) {
+				shard.filter.AddString(metric)
 				// increase outgoing metric prometheus counter
 				m.rm.OutMetrics.Inc()
 				// do nothing for now
-				m.logger.Debug(fmt.Sprintf("adding metric to metadata: %s", string(metric)))
+				m.logger.Debug("adding new metric to bloom filter", zap.String("name", metric))
 			} else {
 				// don't output metrics already in the filter
-				m.logger.Debug(fmt.Sprintf("skipping metric: %s", string(metric)))
+				m.logger.Debug("skipping metric already present in bloom filter", zap.String("name", metric))
 			}
 		}
 	}
 }
 
 func (m *BgMetadata) clearBloomFilter() {
-	m.logger.Info("starting bloom filter clear goroutine")
+	m.logger.Info("starting goroutine for bloom filter cleanup")
 	m.wg.Add(1)
 	defer m.wg.Done()
-	t := time.NewTicker(m.bfCfg.ClearInterval)
+	t := time.NewTicker(m.bfCfg.clearInterval)
 	defer t.Stop()
 
 	for {
 		select {
 		case <-m.ctx.Done():
+			t.Stop()
 			return
 		case <-t.C:
 			for i := range m.shards {
-				m.shards[i].lock.Lock()
-				m.shards[i].filter.ClearAll()
-				m.logger.Debug(fmt.Sprintf("clearing all filters for shard %d", i+1))
-				m.shards[i].lock.Unlock()
-				time.Sleep(m.bfCfg.ClearWait)
+				select {
+				case <-m.ctx.Done():
+					t.Stop()
+					return
+				default:
+					m.shards[i].lock.Lock()
+					m.shards[i].filter.ClearAll()
+					m.logger.Info("clearing filter for shard", zap.Int("shard_number", i+1))
+					m.shards[i].lock.Unlock()
+					time.Sleep(m.bfCfg.clearWait)
+				}
 			}
 		}
 	}
-}
-
-func getShardNum(metricName string, shardingFactor int) uint32 {
-	return crc32.Checksum([]byte(metricName), crc32.MakeTable(crc32.IEEE)) % uint32(shardingFactor)
 }
 
 // Shutdown cancels the context used in BgMetadata and goroutines
@@ -143,8 +160,8 @@ func (m *BgMetadata) Shutdown() error {
 func (m *BgMetadata) Dispatch(dp encoding.Datapoint) {
 	// increase incoming metric prometheus counter
 	m.rm.InMetrics.Inc()
-	shardNum := getShardNum(dp.Name, len(m.shards))
-	m.shards[shardNum].channel <- []byte(dp.Name)
+	shardNum := crc32.ChecksumIEEE([]byte(dp.Name)) % uint32(m.bfCfg.shardingFactor)
+	m.shards[shardNum].channel <- dp.Name
 	return
 }
 
