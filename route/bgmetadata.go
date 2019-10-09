@@ -8,6 +8,7 @@ import (
 
 	"github.com/graphite-ng/carbon-relay-ng/encoding"
 	"github.com/graphite-ng/carbon-relay-ng/matcher"
+	"github.com/graphite-ng/carbon-relay-ng/metrics"
 	"github.com/willf/bloom"
 	"go.uber.org/zap"
 )
@@ -35,6 +36,7 @@ type BgMetadata struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	bfCfg  BloomFilterConfig
+	mm     metrics.BgMetadataMetrics
 }
 
 // NewBloomFilterConfig creates a new BloomFilterConfig
@@ -64,6 +66,9 @@ func NewBgMetadataRoute(key, prefix, sub, regex string, bfCfg BloomFilterConfig)
 		bfCfg:     bfCfg,
 	}
 	m.ctx, m.cancel = context.WithCancel(context.Background())
+
+	m.mm = metrics.NewBgMetadataMetrics(key)
+	m.rm = metrics.NewRouteMetrics(key, "bg_metadata", nil)
 	// init every shard with filter
 	for shardNum := 0; shardNum < bfCfg.shardingFactor; shardNum++ {
 		m.shards[shardNum] = shard{
@@ -133,13 +138,12 @@ func (m *BgMetadata) Dispatch(dp encoding.Datapoint) {
 	shard.lock.Lock()
 	if !shard.filter.TestString(dp.Name) {
 		shard.filter.AddString(dp.Name)
-		// increase outgoing metric prometheus counter
-		m.rm.OutMetrics.Inc()
+		m.mm.AddedMetrics.Inc()
 		// do nothing for now
 		m.logger.Debug("adding new metric to bloom filter", zap.String("name", dp.Name))
 	} else {
 		// don't output metrics already in the filter
-		// TODO add metrics in prometheus for skipped
+		m.mm.FilteredMetrics.Inc()
 		m.logger.Debug("skipping metric already present in bloom filter", zap.String("name", dp.Name))
 	}
 	shard.lock.Unlock()
