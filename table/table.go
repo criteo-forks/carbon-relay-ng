@@ -754,7 +754,7 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 			if bgMetadataCfg.FaultTolerance == 0 {
 				return fmt.Errorf("error adding route '%s': fault tolerance percentage must be specified", routeConfig.Key)
 			}
-			if bgMetadataCfg.FaultTolerance < 0 || bgMetadataCfg.FaultTolerance > 1 {
+			if bgMetadataCfg.FaultTolerance <= 0 || bgMetadataCfg.FaultTolerance >= 1 {
 				return fmt.Errorf("error adding route '%s': fault tolerance value must be between 0 and 1", routeConfig.Key)
 			}
 
