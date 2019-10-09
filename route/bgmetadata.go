@@ -38,7 +38,7 @@ type BgMetadata struct {
 }
 
 // NewBloomFilterConfig creates a new BloomFilterConfig
-func NewBloomFilterConfig(n uint, p float64, shardingFactor int, clearInterval, clearWait time.Duration) (*BloomFilterConfig, error) {
+func NewBloomFilterConfig(n uint, p float64, shardingFactor int, clearInterval, clearWait time.Duration) (BloomFilterConfig, error) {
 	bfc := BloomFilterConfig{
 		n:              n,
 		p:              p,
@@ -53,15 +53,15 @@ func NewBloomFilterConfig(n uint, p float64, shardingFactor int, clearInterval, 
 		bfc.clearWait = clearInterval / time.Duration(shardingFactor)
 		bfc.logger.Debug("overiding clear_wait value", zap.Duration("clear_wait", bfc.clearWait))
 	}
-	return &bfc, nil
+	return bfc, nil
 }
 
 // NewBgMetadataRoute creates BgMetadata, starts sharding and filtering incoming metrics.
-func NewBgMetadataRoute(key, prefix, sub, regex string, bfCfg *BloomFilterConfig) (*BgMetadata, error) {
+func NewBgMetadataRoute(key, prefix, sub, regex string, bfCfg BloomFilterConfig) (*BgMetadata, error) {
 	m := BgMetadata{
 		baseRoute: *newBaseRoute(key, "bg_metadata"),
 		shards:    make([]shard, bfCfg.shardingFactor),
-		bfCfg:     *bfCfg,
+		bfCfg:     bfCfg,
 	}
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 	// init every shard with filter
