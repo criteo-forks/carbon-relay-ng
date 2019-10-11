@@ -23,6 +23,7 @@ import (
 )
 
 type shard struct {
+	num    int
 	filter bloom.BloomFilter
 	lock   sync.RWMutex
 }
@@ -76,12 +77,21 @@ func NewBgMetadataRoute(key, prefix, sub, regex string, bfCfg BloomFilterConfig)
 		shards:    make([]shard, bfCfg.ShardingFactor),
 		bfCfg:     bfCfg,
 	}
+
+	// init every shard with filter
+	for shardNum := 0; shardNum < bfCfg.ShardingFactor; shardNum++ {
+		m.shards[shardNum] = shard{
+			num:    shardNum,
+			filter: *bloom.NewWithEstimates(bfCfg.N, bfCfg.P),
+		}
+	}
+
 	if m.bfCfg.Cache != "" {
 		err := m.createCacheDirectory()
 		if err != nil {
 			return &m, err
 		}
-		err = m.validatePreviousFilterConfig()
+		err = m.validateCachedFilterConfig()
 		if err != nil {
 			m.logger.Warn("cache validation failed", zap.Error(err))
 			err = m.deleteCache()
@@ -93,18 +103,12 @@ func NewBgMetadataRoute(key, prefix, sub, regex string, bfCfg BloomFilterConfig)
 				return &m, err
 			}
 		} else {
+			m.logger.Info("loading cached filter states")
 			for shardNum := 0; shardNum < bfCfg.ShardingFactor; shardNum++ {
-				file, err := os.Open(filepath.Join(m.bfCfg.Cache, fmt.Sprintf("shard%d.state", shardNum)))
+				err = m.shards[shardNum].loadShardState(*m.logger, bfCfg.Cache)
 				if err != nil {
-					// skip state loading if file doesn't exist or cannot be loaded instead of failing
+					// skip state loading if file doesn't exist or cannot be loaded
 					m.logger.Warn("cannot load state file", zap.Int("shard", shardNum), zap.Error(err))
-					continue
-				}
-				defer file.Close()
-				m.logger.Debug("decoding shard state file", zap.String("filename", file.Name()))
-				err = gob.NewDecoder(file).Decode(&m.shards[shardNum].filter)
-				if err != nil {
-					return &m, err
 				}
 			}
 		}
@@ -113,12 +117,6 @@ func NewBgMetadataRoute(key, prefix, sub, regex string, bfCfg BloomFilterConfig)
 
 	m.mm = metrics.NewBgMetadataMetrics(key)
 	m.rm = metrics.NewRouteMetrics(key, "bg_metadata", nil)
-	// init every shard with filter
-	for shardNum := 0; shardNum < bfCfg.ShardingFactor; shardNum++ {
-		m.shards[shardNum] = shard{
-			filter: *bloom.NewWithEstimates(bfCfg.N, bfCfg.P),
-		}
-	}
 
 	go m.clearBloomFilter()
 
@@ -130,6 +128,33 @@ func NewBgMetadataRoute(key, prefix, sub, regex string, bfCfg BloomFilterConfig)
 	m.config.Store(baseConfig{*mt, nil})
 
 	return &m, nil
+}
+
+func (s *shard) loadShardState(logger zap.Logger, cachePath string) error {
+	file, err := os.Open(filepath.Join(cachePath, fmt.Sprintf("shard%d.state", s.num)))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	logger.Debug("decoding shard state file", zap.String("filename", file.Name()))
+	err = gob.NewDecoder(file).Decode(&s.filter)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *shard) saveShardState(cachePath string) error {
+	stateFile, err := os.Create(filepath.Join(cachePath, fmt.Sprintf("shard%d.state", s.num)))
+	if err != nil {
+		return err
+	}
+	defer stateFile.Close()
+	err = gob.NewEncoder(stateFile).Encode(&s.filter)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *BgMetadata) clearBloomFilter() {
@@ -153,17 +178,12 @@ func (m *BgMetadata) clearBloomFilter() {
 					return
 				default:
 					sh.lock.Lock()
-					stateFile, err := os.Create(filepath.Join(m.bfCfg.Cache, fmt.Sprintf("shard%d.state", i)))
+					err := sh.saveShardState(m.bfCfg.Cache)
 					if err != nil {
 						m.logger.Error("cannot save shard state to filesystem", zap.Error(err))
 					}
-					defer stateFile.Close()
-					err = gob.NewEncoder(stateFile).Encode(&sh.filter)
-					if err != nil {
-						m.logger.Error("cannot gob encode shard filter state", zap.Error(err))
-					}
-					sh.filter.ClearAll()
 					m.logger.Debug("clearing filter for shard", zap.Int("shard_number", i+1))
+					sh.filter.ClearAll()
 					sh.lock.Unlock()
 					time.Sleep(m.bfCfg.ClearWait)
 				}
@@ -184,7 +204,7 @@ func (m *BgMetadata) saveFilterConfig() error {
 	return gob.NewEncoder(file).Encode(&m.bfCfg)
 }
 
-func (m *BgMetadata) validatePreviousFilterConfig() error {
+func (m *BgMetadata) validateCachedFilterConfig() error {
 	configPath := filepath.Join(m.bfCfg.Cache, "bloom_filter_config")
 	file, err := os.Open(configPath)
 	if err != nil {
@@ -211,7 +231,11 @@ func (m *BgMetadata) createCacheDirectory() error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			m.logger.Info("creating directory for cache", zap.String("path", m.bfCfg.Cache))
-			os.MkdirAll(m.bfCfg.Cache, os.ModePerm)
+			mkdirErr := os.MkdirAll(m.bfCfg.Cache, os.ModePerm)
+			if mkdirErr != nil {
+				m.logger.Error("cannot create cache directory", zap.String("path", m.bfCfg.Cache))
+				return mkdirErr
+			}
 			return nil
 		}
 		m.logger.Error("cannot not check cache directory", zap.String("path", m.bfCfg.Cache))
@@ -255,6 +279,7 @@ func (m *BgMetadata) Dispatch(dp encoding.Datapoint) {
 	shardNum := crc32.ChecksumIEEE([]byte(dp.Name)) % uint32(m.bfCfg.ShardingFactor)
 	shard := &m.shards[shardNum]
 	shard.lock.Lock()
+	defer shard.lock.Unlock()
 	if !shard.filter.TestString(dp.Name) {
 		shard.filter.AddString(dp.Name)
 		m.mm.AddedMetrics.Inc()
@@ -263,7 +288,6 @@ func (m *BgMetadata) Dispatch(dp encoding.Datapoint) {
 		// don't output metrics already in the filter
 		m.mm.FilteredMetrics.Inc()
 	}
-	shard.lock.Unlock()
 	return
 }
 
