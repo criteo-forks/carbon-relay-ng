@@ -767,9 +767,12 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				return fmt.Errorf("error adding route '%s': could not parse clear_interval", routeConfig.Key)
 			}
 
-			clearWait, err := time.ParseDuration(bgMetadataCfg.ClearWait)
-			if err != nil && bgMetadataCfg.ClearWait != "" {
-				return fmt.Errorf("error adding route '%s': could not parse clear_wait", routeConfig.Key)
+			var clearWait time.Duration
+			if bgMetadataCfg.ClearWait != "" {
+				clearWait, err = time.ParseDuration(bgMetadataCfg.ClearWait)
+				if err != nil {
+					return fmt.Errorf("error adding route '%s': could not parse clear_wait", routeConfig.Key)
+				}
 			}
 
 			if clearWait > clearInterval/time.Duration(bgMetadataCfg.ShardingFactor) {
