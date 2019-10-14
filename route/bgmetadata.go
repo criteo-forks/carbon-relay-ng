@@ -178,9 +178,11 @@ func (m *BgMetadata) clearBloomFilter() {
 					return
 				default:
 					sh.lock.Lock()
-					err := sh.saveShardState(m.bfCfg.Cache)
-					if err != nil {
-						m.logger.Error("cannot save shard state to filesystem", zap.Error(err))
+					if m.bfCfg.Cache != "" {
+						err := sh.saveShardState(m.bfCfg.Cache)
+						if err != nil {
+							m.logger.Error("cannot save shard state to filesystem", zap.Error(err))
+						}
 					}
 					m.logger.Debug("clearing filter for shard", zap.Int("shard_number", i+1))
 					sh.filter.ClearAll()
