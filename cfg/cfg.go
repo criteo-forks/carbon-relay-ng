@@ -128,7 +128,7 @@ type BgMetadataRouteConfig struct {
 	FilterSize     uint    `toml:"filter_size,omitempty"`     // max total number of metrics
 	FaultTolerance float64 `toml:"fault_tolerance,omitempty"` // value 0.0 - 1.0
 	ClearInterval  string  `toml:"clear_interval,omitempty"`  // frequency of filter clearing
-	ClearWait      string  `toml:"clear_wait,omitempty"`      // wait time between each filter clear
+	ClearWait      string  `toml:"clear_wait,omitempty"`      // wait time between each filter clear. defaults to clear_wait/sharding_factor
 	Cache          string  `toml:"cache,omitempty"`           // location of filter storage on disk; feature not enabled if path not provided
 }
 

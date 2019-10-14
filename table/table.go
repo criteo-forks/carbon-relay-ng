@@ -767,6 +767,8 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				return fmt.Errorf("error adding route '%s': could not parse clear_interval", routeConfig.Key)
 			}
 
+			// clearWait is not required, so it's only parsed if it's defined
+			// if undefined, it's set to clearInterval/ShardingFactor as default
 			var clearWait time.Duration
 			if bgMetadataCfg.ClearWait != "" {
 				clearWait, err = time.ParseDuration(bgMetadataCfg.ClearWait)

@@ -14,7 +14,7 @@ func testBloomFilterConfig() BloomFilterConfig {
 		shardingFactor = 3
 		filterSize     = 1000000
 		faultTolerance = 0.0000001
-		clearInterval  = time.Duration(300 * time.Millisecond)
+		clearInterval  = time.Duration(10 * time.Millisecond)
 		cache          = "" // don't test caching
 	)
 	var clearWait time.Duration
@@ -58,7 +58,7 @@ func TestMetricFiltering(t *testing.T) {
 
 	// check if added metrics are cleared from the filters
 	go m.clearBloomFilter()
-	time.Sleep(1 * time.Second)
+	time.Sleep(30 * time.Millisecond)
 	m.Shutdown()
 	for i := 0; i < len(dp); i++ {
 		assert.False(t, m.shards[i].filter.TestString(dp[i].Name))
