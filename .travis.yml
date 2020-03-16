@@ -6,12 +6,12 @@ script:
 - make test
 before_deploy:
 - tar cvzf carbon-relay-ng-${TRAVIS_TAG#?}-linux-amd64.tar.gz carbon-relay-ng
-- "sha256sum carbon-relay-ng-*.tar.gz" > sha256
+- echo `sha256sum carbon-relay-ng-*.tar.gz` > sha256
 deploy:
   provider: releases
   api_key:
     secure: HN/+3m2ZuQ1BRvzoh8gElWqVbpslzAh/GMF+1h6+qqSR7nYItwm1x+p9+EyELmfyRlas7OzhxThsO79yklT0dcvuONrydr77yf+BDBR510PvHxydlY1iK4P4pRQl8mm7FT4l8SqhvqZpgwak+HACFYprMXP8QPLlt3qKBaollZSVbol0pFwaN1+64UbPOyafFuBM/I0AWw0xWHQipgLqXV/AiHaTLuTSnO+Mw51x6dPfHTe5Rq6OFpuvMzdmURcwgteEXGLfH0QRTr0r1mdMDftuIfwYmLGawohKnGFeNt2YylbKuGZvY7DXmJhWdFRhhDRo9PVKkmh7Pm3wtc3uZ32fTpBCzE51bvH/dfF6cFKrXtU1yK4kO8hE73GS2Kqsxq7/Ov+CaIP+FItJVkz5IUXAoj1snMjYwiGfw2istdE0Pyg4yi7OA4k3G7sZ2jdhqnTyjzl/mZhwCfGZjOEOEnkZ/3FKNJQj4xr8tR4yg+D29ETPOd75GVJ6QDF7/Oohy0Je4tuvbnnVSDeKw1swN5ygCz17zNdMrmJaSb8h7MairuFEpfpxxYE1H6m6qGzWBJSXuVlVkTLGkBeZ5PzcP0bWSNL341f+axh41HwewzrncX+MA9Kyd09bbTeqh9mNKHsRayOXDw6D17FDb7hTZswVmHBV5CNV/gLc+B8Sp0k=
-  file: 
+  file:
    - "carbon-relay-ng-${TRAVIS_TAG#?}-linux-amd64.tar.gz"
    - "sha256"
   skip_cleanup: true
