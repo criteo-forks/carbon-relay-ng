@@ -1,7 +1,7 @@
 {
     "index_patterns": ["biggraphite_directories-*"], 
     "settings": {
-      "index.lifecycle.name": "biggraphite", 
+      "index.lifecycle.name": "biggraphite-metadata", 
       "index.lifecycle.rollover_alias": "biggraphite_directories"
     },
     "mappings":{
