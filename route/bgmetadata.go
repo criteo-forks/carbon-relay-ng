@@ -354,7 +354,7 @@ func (m *BgMetadata) deleteCache() error {
 }
 
 // testStringAndAdd will check if string present in bloom filters and add it if it's not
-// returns wether the string was in the BF or not
+// returns weather the string was in the BF or not
 // The shard is determined based on the name crc32 hash and sharding factor
 func (m *BgMetadata) testStringAndAdd(name string) bool {
 	shardNum := crc32.ChecksumIEEE([]byte(name)) % uint32(m.bfCfg.ShardingFactor)
@@ -389,14 +389,7 @@ func (m *BgMetadata) Dispatch(dp encoding.Datapoint) {
 		m.DispatchDirectory(dp)
 		metricMetadata := storage.NewMetricMetadata(dp.Name, m.storageSchemas, m.storageAggregations)
 		metric := storage.NewMetric(dp.Name, metricMetadata, dp.Tags)
-		// add metric name to directory channel for dirs to be created if needed in a separate goroutine
-		m.maxConcurrentWrites <- 1
-		m.wg.Add(1)
-		go func() {
-			m.storage.UpdateMetricMetadata(metric)
-			<-m.maxConcurrentWrites
-			m.wg.Done()
-		}()
+		m.storage.UpdateMetricMetadata(metric)
 	} else {
 		// don't output metrics already in the filter
 		m.mm.FilteredMetrics.Inc()
@@ -413,15 +406,8 @@ func (m *BgMetadata) DispatchDirectory(dp encoding.Datapoint) {
 
 	if !m.testStringAndAdd(dirname) {
 		directory := storage.NewMetricDirectory(dirname)
-		m.maxConcurrentWrites <- 1
-		m.wg.Add(1)
-		go func() {
-			directory.UpdateDirectories(m.storage)
-			<-m.maxConcurrentWrites
-			m.wg.Done()
-		}()
+		directory.UpdateDirectories(m.storage)
 	}
-
 }
 
 func (m *BgMetadata) Snapshot() Snapshot {
