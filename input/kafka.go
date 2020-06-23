@@ -23,6 +23,7 @@ type Kafka struct {
 	closed     chan bool
 	ready      chan bool
 	logger     *zap.Logger
+	enableTags bool
 }
 
 func (kafka *Kafka) Name() string {
@@ -73,7 +74,7 @@ func (k *Kafka) Stop() error {
 	return nil
 }
 
-func NewKafka(brokers []string, topic string, consumerGroup string, kafkaConfig *sarama.Config, h encoding.FormatAdapter) *Kafka {
+func NewKafka(brokers []string, topic string, consumerGroup string, kafkaConfig *sarama.Config, h encoding.FormatAdapter, enableTags bool) *Kafka {
 
 	logger := zap.L().With(zap.String("kafka_topic", topic), zap.String("kafka_consumer_group_id", consumerGroup))
 
@@ -97,6 +98,7 @@ func NewKafka(brokers []string, topic string, consumerGroup string, kafkaConfig 
 		ctx:       context.Background(),
 		closed:    make(chan bool),
 		logger:    logger,
+		enableTags: enableTags,
 	}
 }
 
@@ -112,6 +114,7 @@ func (k *Kafka) Cleanup(sarama.ConsumerGroupSession) error {
 	return nil
 }
 
+var noTags = make(map[string]string)
 func (k *Kafka) getKafkaTags(header []*sarama.RecordHeader) map[string]string {
 	tags := make(map[string]string)
 	for i := 0; i < len(header); i++ {
@@ -131,12 +134,19 @@ func (k *Kafka) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.C
 		if ce := k.logger.Check(zap.DebugLevel, "debug message value"); ce != nil {
 			ce.Write(zap.ByteString("message", message.Value))
 		}
-		tags := k.getKafkaTags(message.Headers)
-		if err := k.handle(message.Value, tags); err != nil {
+
+		tags := noTags
+		if k.enableTags {
+			tags = k.getKafkaTags(message.Headers)
+		}
+
+		err := k.handle(message.Value, tags)
+		if err != nil {
 			if ce := k.logger.Check(zap.DebugLevel, "invalid message from kafka"); ce != nil {
 				ce.Write(zap.ByteString("message", message.Value))
 			}
 		}
+
 		session.MarkMessage(message, "")
 	}
 	return nil

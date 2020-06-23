@@ -89,6 +89,7 @@ type KafkaConfig struct {
 	MaxAttempts         int           `mapstructure:"max_attempts,omitempty"`
 	ReturnErrors        bool          `mapstructure:"return_errors,omitempty"`
 	InitialOffsetOldest bool          `mapstructure:"initial_offset_oldest,omitempty"`
+	EnableTags          bool          `mapstructure:"enable tags processing"`
 }
 
 func (c *KafkaConfig) Build() (input.Input, error) {
@@ -170,7 +171,7 @@ func (c *KafkaConfig) Build() (input.Input, error) {
 	if err != nil {
 		return nil, fmt.Errorf(handlerErrorFmt, fmt.Sprintf("kafka config: %s", err))
 	}
-	return input.NewKafka(brokers, topic, consumerGroupID, kafkaConfig, h), nil
+	return input.NewKafka(brokers, topic, consumerGroupID, kafkaConfig, h, c.EnableTags), nil
 }
 
 func (c *Config) ProcessInputConfig() error {
