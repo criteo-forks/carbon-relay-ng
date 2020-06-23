@@ -3,11 +3,11 @@ package input
 import (
 	"context"
 	"fmt"
-	"github.com/graphite-ng/carbon-relay-ng/metrics"
 	"strings"
 
 	"github.com/Shopify/sarama"
 	"github.com/graphite-ng/carbon-relay-ng/encoding"
+	"github.com/graphite-ng/carbon-relay-ng/metrics"
 	"go.uber.org/zap"
 )
 
@@ -117,7 +117,9 @@ func (k *Kafka) getKafkaTags(header []*sarama.RecordHeader) map[string]string {
 	for i := 0; i < len(header); i++ {
 		key := string(header[i].Key)
 		value := string(header[i].Value)
-		k.logger.Debug("tags print", zap.String("key", key), zap.String("value", value))
+		if ce := k.logger.Check(zap.DebugLevel, "debug kafka tags"); ce != nil {
+			ce.Write(zap.String("key", key), zap.String("value", value))
+		}
 		tags[key] = value
 	}
 	return tags
@@ -126,10 +128,14 @@ func (k *Kafka) getKafkaTags(header []*sarama.RecordHeader) map[string]string {
 // ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
 func (k *Kafka) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
-		k.logger.Debug("metric value:", zap.ByteString("messageValue", message.Value))
+		if ce := k.logger.Check(zap.DebugLevel, "debug message value"); ce != nil {
+			ce.Write(zap.ByteString("message", message.Value))
+		}
 		tags := k.getKafkaTags(message.Headers)
 		if err := k.handle(message.Value, tags); err != nil {
-			k.logger.Debug("invalid message from kafka", zap.ByteString("messageValue", message.Value))
+			if ce := k.logger.Check(zap.DebugLevel, "invalid message from kafka"); ce != nil {
+				ce.Write(zap.ByteString("message", message.Value))
+			}
 		}
 		session.MarkMessage(message, "")
 	}
