@@ -15,9 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/graphite-ng/carbon-relay-ng/cfg"
@@ -60,7 +57,6 @@ type BgMetadata struct {
 	storageSchemas      []storage.StorageSchema
 	storageAggregations []storage.StorageAggregation
 	storage             storage.BgMetadataStorageConnector
-	maxConcurrentWrites chan int
 }
 
 // NewBloomFilterConfig creates a new BloomFilterConfig
@@ -153,27 +149,21 @@ func NewBgMetadataRoute(key, prefix, sub, regex, aggregationCfg, schemasCfg stri
 	go m.clearBloomFilter()
 	switch storageName {
 	case "cassandra":
+		// WIP
 		m.storage = storage.NewCassandraMetadata()
-		m.maxConcurrentWrites = make(chan int, 1)
 	case "elasticsearch":
 		if v, ok := additionnalCfg.(*cfg.BgMetadataESConfig); ok == true {
 			m.storage = storage.NewBgMetadataElasticSearchConnectorWithDefaults(v)
-			m.maxConcurrentWrites = make(chan int, 1)
 		} else {
 			return &m, fmt.Errorf("missing elasticsearch configuration")
 		}
 	case "noop":
 		m.storage = &storage.BgMetadataNoOpStorageConnector{}
-		m.maxConcurrentWrites = make(chan int, 1)
+	case "testing":
+		m.storage = &storage.BgMetadataTestingStorageConnector{}
 	default:
 		log.Fatalf("unknown metadata backend")
 	}
-
-	promauto.NewGaugeFunc(prometheus.GaugeOpts{
-		Namespace: "bgmetadata",
-		Name:      "pending_storage_writes",
-		Help:      "number of pending storage write requests",
-	}, func() float64 { return float64(len(m.maxConcurrentWrites)) })
 
 	// matcher required to initialise route.Config for routing table, othewise it will panic
 	mt, err := matcher.New(prefix, sub, regex)
@@ -354,7 +344,7 @@ func (m *BgMetadata) deleteCache() error {
 }
 
 // testStringAndAdd will check if string present in bloom filters and add it if it's not
-// returns weather the string was in the BF or not
+// returns whether the string was in the BF or not
 // The shard is determined based on the name crc32 hash and sharding factor
 func (m *BgMetadata) testStringAndAdd(name string) bool {
 	shardNum := crc32.ChecksumIEEE([]byte(name)) % uint32(m.bfCfg.ShardingFactor)
@@ -390,6 +380,7 @@ func (m *BgMetadata) Dispatch(dp encoding.Datapoint) {
 		metricMetadata := storage.NewMetricMetadata(dp.Name, m.storageSchemas, m.storageAggregations)
 		metric := storage.NewMetric(dp.Name, metricMetadata, dp.Tags)
 		m.storage.UpdateMetricMetadata(metric)
+
 	} else {
 		// don't output metrics already in the filter
 		m.mm.FilteredMetrics.Inc()

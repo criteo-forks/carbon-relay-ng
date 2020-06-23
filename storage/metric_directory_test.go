@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,7 +16,7 @@ func TestGenerateParentDirectory(t *testing.T) {
 }
 
 func TestUpdateDirectories(t *testing.T) {
-	conn := &BgMetadataNoOpStorageConnector{make([]string, 0, 3), make([]string, 0, 3), make([]string, 0, 3)}
+	conn := &BgMetadataTestingStorageConnector{make([]string, 0, 3), make([]string, 0, 3), make([]string, 0, 3), sync.Mutex{}}
 	dir := NewMetricDirectory("a.b.c")
 	dir.UpdateDirectories(conn)
 

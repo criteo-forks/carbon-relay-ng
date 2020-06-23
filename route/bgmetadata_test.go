@@ -42,7 +42,7 @@ func testBgMetadata(t *testing.T) *BgMetadata {
 		agg    = "../examples/storage-aggregation.conf"
 	)
 	bfc := testBloomFilterConfig()
-	m, _ := NewBgMetadataRoute(key, prefix, sub, regex, agg, sch, bfc, "noop", nil)
+	m, _ := NewBgMetadataRoute(key, prefix, sub, regex, agg, sch, bfc, "testing", nil)
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 	return m
 }
@@ -74,7 +74,7 @@ func TestMetricUpdated(t *testing.T) {
 	m := testBgMetadata(t)
 	m.Dispatch(encoding.Datapoint{Name: "metric.name.aaaa"})
 	m.Shutdown()
-	conn := m.storage.(*storage.BgMetadataNoOpStorageConnector)
+	conn := m.storage.(*storage.BgMetadataTestingStorageConnector)
 	assert.Contains(t, conn.UpdatedMetrics, "metric.name.aaaa")
 }
 
@@ -82,7 +82,7 @@ func TestDirectoriesUpdated(t *testing.T) {
 	m := testBgMetadata(t)
 	m.Dispatch(encoding.Datapoint{Name: "metric.name.aaaa"})
 	m.Shutdown()
-	conn := m.storage.(*storage.BgMetadataNoOpStorageConnector)
+	conn := m.storage.(*storage.BgMetadataTestingStorageConnector)
 
 	assert.Contains(t, conn.UpdatedDirectories, "metric.name")
 	assert.Contains(t, conn.UpdatedDirectories, "metric")

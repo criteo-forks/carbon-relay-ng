@@ -805,8 +805,8 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				return fmt.Errorf("error adding route '%s': clear wait value must be less than clear_interval / sharding_factor", routeConfig.Key)
 			}
 			var additionnalCfg interface{} = nil
-			if bgMetadataCfg.Storage != "cassandra" && bgMetadataCfg.Storage != "elasticsearch" && bgMetadataCfg.Storage != "" {
-				return fmt.Errorf("error adding route '%s': storage value must be 'cassandra', 'elasticsearch' or ''", routeConfig.Key)
+			if bgMetadataCfg.Storage != "cassandra" && bgMetadataCfg.Storage != "elasticsearch" && bgMetadataCfg.Storage != "noop" && bgMetadataCfg.Storage != "testing" {
+				return fmt.Errorf("error adding route '%s': storage value must be 'cassandra', 'elasticsearch', 'noop' or 'testing'", routeConfig.Key)
 			}
 
 			if bgMetadataCfg.Storage == "elasticsearch" {

@@ -20,12 +20,14 @@ func NewBgMetadataMetrics(id string) BgMetadataMetrics {
 	labels := prometheus.Labels{
 		"id": id,
 	}
+
 	mm.AddedMetrics = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace:   namespace,
 		Name:        "added_metrics_total",
 		Help:        "total number of metrics added to metadata",
 		ConstLabels: labels,
 	})
+
 	mm.FilteredMetrics = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace:   namespace,
 		Name:        "filtered_metrics_total",
@@ -45,6 +47,7 @@ func NewBgMetadataMetrics(id string) BgMetadataMetrics {
 		Help:        "max entries on all shards",
 		ConstLabels: labels,
 	})
+
 	_ = prometheus.DefaultRegisterer.Register(mm.BloomFilterEntries)
 	return mm
 }
