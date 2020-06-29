@@ -182,16 +182,18 @@ func (k *Kafka) Setup(session sarama.ConsumerGroupSession) error {
 
 	// Iterate newly assigned partitions
 	for _, partition := range session.Claims()[k.topic] {
+
+		if k.resetOffsets {
+			// Reset partition offset to end of the stream
+			k.logger.Info("resetting consumer offset", zap.String("partition", fmt.Sprintf("%d", partition)))
+			session.ResetOffset(k.topic, partition, sarama.OffsetNewest, "")
+		}
+
 		if _, ok := k.contexts[partition]; !ok {
 			// New partition : initialize partition scoped context
 			k.logger.Debug("initializing context", zap.String("partition", fmt.Sprintf("%d", partition)))
 			k.contexts[partition] = newPartitionContext(partition)
 
-			if k.resetOffsets {
-				// Reset partition offset to end of the stream
-				k.logger.Info("resetting consumer offset", zap.String("partition", fmt.Sprintf("%d", partition)))
-				session.ResetOffset(k.topic, partition, sarama.OffsetNewest, "")
-			}
 		} else {
 			// Already existing partition : do nothing
 		}
