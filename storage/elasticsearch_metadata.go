@@ -105,6 +105,7 @@ type BgMetadataElasticSearchConnector struct {
 	HTTPErrors                               *prometheus.CounterVec
 	WriteDurationMs                          prometheus.Histogram
 	DocumentBuildDurationMs                  prometheus.Histogram
+	RequestSize                              prometheus.Histogram
 	KnownIndices                             map[string]bool
 	bulkBuffer                               []ElasticSearchDocument
 	BulkSize                                 uint
@@ -147,6 +148,13 @@ func newBgMetadataElasticSearchConnector(elasticSearchClient ElasticSearchClient
 			Name:      "write_duration_ms",
 			Help:      "time spent writing to ElasticSearch based on `took` field of response ",
 			Buckets:   []float64{250, 500, 750, 1000, 1500, 2000, 5000, 10000}}),
+
+		RequestSize: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace: namespace,
+			Name:      "write_request_size_bytes",
+			Help:      "Size of batch create requests performed on elasticsearch",
+			Buckets:   []float64{10000, 100000, 1000000, 5000000, 10000000, 20000000, 50000000}}),
+
 		DocumentBuildDurationMs: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: namespace,
 			Name:      "document_build_duration_ms",
@@ -157,6 +165,8 @@ func newBgMetadataElasticSearchConnector(elasticSearchClient ElasticSearchClient
 	_ = registry.Register(esc.UpdatedDocuments)
 	_ = registry.Register(esc.WriteDurationMs)
 	_ = registry.Register(esc.DocumentBuildDurationMs)
+	_ = registry.Register(esc.HTTPErrors)
+	_ = registry.Register(esc.RequestSize)
 	if esc.IndexName == "" {
 		esc.IndexName = default_metrics_metadata_index
 	}
@@ -256,7 +266,7 @@ func (esc *BgMetadataElasticSearchConnector) sendAndClearBuffer() error {
 	timeBeforeBuild := time.Now()
 	requestBody := BuildElasticSearchDocumentMulti(metricIndex, directoryIndex, esc.bulkBuffer)
 	esc.DocumentBuildDurationMs.Observe(float64(time.Since(timeBeforeBuild).Milliseconds()))
-
+	esc.RequestSize.Observe(float64(len(requestBody)))
 	for attempt := uint(0); attempt <= esc.MaxRetry; attempt++ {
 		res, err := esc.bulkUpdate(requestBody)
 
