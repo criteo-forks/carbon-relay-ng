@@ -99,7 +99,7 @@ func (s *Spool) Reader() {
 			s.logger.Error("failed to dequeue item", zap.Error(err))
 			continue
 		}
-		dp, err := h.Load(i.Value, i.Tags)
+		dp, err := h.Load(i.Value, make(encoding.Tags))
 		if err != nil {
 			s.logger.Error("failed to deserialize datapoint", zap.Error(err))
 			continue
@@ -152,7 +152,7 @@ func (s *Spool) Buffer() {
 			s.sm.Buffer.BufferedMetrics.Dec()
 
 			pre := time.Now()
-			s.queue.Enqueue(dp.AppendToBuf(buf), dp.Tags)
+			s.queue.Enqueue(dp.AppendToBuf(buf))
 			chunk = chunk[:0]
 			s.sm.WriteDuration.Observe(time.Since(pre).Seconds())
 		}

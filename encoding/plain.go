@@ -20,6 +20,7 @@ var (
 	errEmptyline              = errors.New("empty line")
 	errFmtNullInKey           = "null char at position %d"
 	errFmtNotAscii            = "non-ascii char at position %d"
+	errIncomplete             = "incomplete graphite datapoint"
 )
 
 const PlainFormat FormatName = "plain"
@@ -139,6 +140,11 @@ func (p PlainAdapter) load(msgbuf []byte, tags Tags) (Datapoint, error) {
 		return d, errFieldsNum
 	}
 	firstSpace += start
+
+	if firstSpace == len(msg)-1 {
+		return d, fmt.Errorf(errIncomplete)
+	}
+
 	var err error
 	d.Name, err = p.parseKey(msg[start:firstSpace])
 	if err != nil {
@@ -157,6 +163,11 @@ func (p PlainAdapter) load(msgbuf []byte, tags Tags) (Datapoint, error) {
 		return d, errFieldsNum
 	}
 	nextSpace += firstSpace
+
+	if nextSpace == len(msg)-1 {
+		return d, fmt.Errorf(errIncomplete)
+	}
+
 	v, err := strconv.ParseFloat(msg[firstSpace:nextSpace], 64)
 	if err != nil {
 		return d, err

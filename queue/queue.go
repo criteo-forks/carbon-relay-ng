@@ -4,7 +4,6 @@ package queue
 
 import (
 	"errors"
-	"github.com/graphite-ng/carbon-relay-ng/encoding"
 	"os"
 	"sync"
 
@@ -48,7 +47,7 @@ func OpenQueue(dataDir string, o *opt.Options) (*Queue, error) {
 }
 
 // Enqueue adds an item to the queue.
-func (q *Queue) Enqueue(value []byte, tags encoding.Tags) (*Item, error) {
+func (q *Queue) Enqueue(value []byte) (*Item, error) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -62,7 +61,6 @@ func (q *Queue) Enqueue(value []byte, tags encoding.Tags) (*Item, error) {
 		ID:    q.tail + 1,
 		Key:   encodeID(q.tail + 1),
 		Value: value,
-		Tags:  tags,
 	}
 
 	// Add it to the queue.

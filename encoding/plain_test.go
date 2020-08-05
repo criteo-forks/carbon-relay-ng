@@ -9,10 +9,16 @@ import (
 func TestValidationInvalid(t *testing.T) {
 	h := NewPlain(false)
 	metrics := map[string][]byte{
-		"incorrectFields": []byte("incorrect fields 21300.00 12351123"),
-		"stringValue":     []byte("incorrect_value two 12351123"),
-		"stringTime":      []byte("incorrect_time 1.0 two"),
-	}
+		"incorrectFields":                []byte("incorrect fields 21300.00 12351123"),
+		"stringValue":                    []byte("incorrect_value two 12351123"),
+		"stringTime":                     []byte("incorrect_time 1.0 two"),
+		"incompleteValue":                []byte("incomplete "),
+		"incompleteValueOff":             []byte("   incomplete "),
+		"incompleteValueDot":             []byte(".......incomplete "),
+		"incompleteValueOffNoTrail":      []byte(" incomplete"),
+		"incompleteValueNoTrail":         []byte("incomplete"),
+		"incompleteValueWithValAndTrail": []byte("incomplete 2020 "),
+		"randomBinary":                   []byte("\x10\x68\xcc\x9c\x2c\xa6\x26\xbb\x8a\x1d\x1f\x4d\xfd\x51\xe2\x9e\xd8\xbf\xef\x69\x6b\x60\xaa\x2d\xec\xdf\x23\xb1\xd8\x2c\x1b\x52\x01\x4a\x52\x76\x07\x7f\xb7\xb6")}
 	for test, metric := range metrics {
 		t.Run(test, func(t *testing.T) {
 			_, err := h.load(metric, Tags{})

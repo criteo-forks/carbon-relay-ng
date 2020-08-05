@@ -2,7 +2,6 @@ package queue
 
 import (
 	"encoding/binary"
-	"github.com/graphite-ng/carbon-relay-ng/encoding"
 )
 
 // var keyPool = sync
@@ -12,7 +11,6 @@ type Item struct {
 	ID    uint64
 	Key   []byte
 	Value []byte
-	Tags  encoding.Tags
 }
 
 func (i *Item) ToString() string {

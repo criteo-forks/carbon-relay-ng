@@ -20,7 +20,7 @@ func (dp Datapoint) String() string {
 }
 
 func (dp Datapoint) AppendToBuf(buf []byte) (ret []byte) {
-	ret = append(buf, dp.Name...)
+	ret = append(buf, dp.FullName()...)
 	ret = append(ret, ' ')
 	ret = strconv.AppendFloat(ret, dp.Value, 'f', 3, 64)
 	ret = append(ret, ' ')
