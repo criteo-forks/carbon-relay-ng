@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -179,11 +180,16 @@ func newBgMetadataElasticSearchConnector(elasticSearchClient ElasticSearchClient
 	return &esc
 }
 
-func createElasticSearchClient(servers []string, username, password string) (*elasticsearch.Client, error) {
+func createElasticSearchClient(servers []string, username, password string, allow_insecure_tls bool) (*elasticsearch.Client, error) {
 	cfg := elasticsearch.Config{
 		Addresses: servers,
 		Username:  username,
 		Password:  password,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: allow_insecure_tls,
+			},
+		},
 	}
 
 	es, err := elasticsearch.NewClient(cfg)
@@ -200,7 +206,7 @@ func createElasticSearchClient(servers []string, username, password string) (*el
 
 // NewBgMetadataElasticSearchConnectorWithDefaults is the public contructor of BgMetadataElasticSearchConnector
 func NewBgMetadataElasticSearchConnectorWithDefaults(cfg *cfg.BgMetadataESConfig) *BgMetadataElasticSearchConnector {
-	es, err := createElasticSearchClient(cfg.StorageServers, cfg.Username, cfg.Password)
+	es, err := createElasticSearchClient(cfg.StorageServers, cfg.Username, cfg.Password, cfg.AllowInsecureTLS)
 
 	if err != nil {
 		log.Fatalf("Could not create ElasticSearch connector: %v", err)

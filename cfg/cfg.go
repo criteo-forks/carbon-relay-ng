@@ -138,13 +138,14 @@ type BgMetadataRouteConfig struct {
 }
 
 type BgMetadataESConfig struct {
-	StorageServers []string `toml:"storage_servers,omitempty"`
-	BulkSize       uint     `toml:"bulk_size,omitempty,default=1"`
-	Username       string   `toml:"username,omitempty"`
-	Password       string   `toml:"password,omitempty"`
-	IndexName      string   `toml:"index_name,omitempty"`     // index prefix, will be appended with date
-	IndexDateFmt   string   `toml:"index_date_fmt,omitempty"` // strftime string, date will be formated using this then appended to index
-	MaxRetry       uint     `toml:"max_retry,omitempty"`
+	StorageServers   []string `toml:"storage_servers,omitempty"`
+	BulkSize         uint     `toml:"bulk_size,omitempty,default=1"`
+	Username         string   `toml:"username,omitempty"`
+	Password         string   `toml:"password,omitempty"`
+	IndexName        string   `toml:"index_name,omitempty"`     // index prefix, will be appended with date
+	IndexDateFmt     string   `toml:"index_date_fmt,omitempty"` // strftime string, date will be formated using this then appended to index
+	MaxRetry         uint     `toml:"max_retry,omitempty"`
+	AllowInsecureTLS bool     `toml:"allow_insecure_tls,omitempty,default=false"`
 }
 
 type Rewriter struct {
