@@ -43,7 +43,10 @@ func (b *BaseInput) handleReader(r io.Reader, tags encoding.Tags) error {
 		}
 
 		// Use taintedTags.
-		b.handle(scanner.Bytes(), taintedTags)
+		err := b.handle(scanner.Bytes(), taintedTags)
+		if err != nil {
+			return err
+		}
 	}
 	return scanner.Err()
 }
@@ -54,7 +57,7 @@ func (b *BaseInput) handle(msg []byte, tags encoding.Tags) error {
 	}
 	d, err := b.handler.Load(msg, tags)
 	if err != nil {
-		return fmt.Errorf("error while processing `%s`: %s", string(msg), err)
+		return fmt.Errorf("error while processing `%s`: %s", string(truncate(msg)), err)
 	}
 	b.Dispatcher.Dispatch(d)
 	return nil
@@ -68,4 +71,11 @@ type Dispatcher interface {
 	// does not apply to carbon as the protocol is trivial and any parse failure
 	// is a message failure (handled in Dispatch)
 	IncNumInvalid()
+}
+
+func truncate(msg []byte) []byte {
+	if len(msg) > 100 {
+		return append(msg[:100], []byte("...")...)
+	}
+	return msg
 }
