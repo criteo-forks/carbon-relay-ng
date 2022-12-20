@@ -3,6 +3,7 @@ package input
 import (
 	"bufio"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 
 	"github.com/graphite-ng/carbon-relay-ng/encoding"
@@ -20,6 +21,7 @@ type BaseInput struct {
 	Dispatcher Dispatcher
 	name       string
 	handler    encoding.FormatAdapter
+	logger     *zap.Logger
 }
 
 func (b *BaseInput) Name() string {
@@ -45,8 +47,9 @@ func (b *BaseInput) handleReader(r io.Reader, tags encoding.Tags) error {
 		// Use taintedTags.
 		err := b.handle(scanner.Bytes(), taintedTags)
 		if err != nil {
-			return err
+			b.logger.Warn("Handling issue", zap.Error(err))
 		}
+
 	}
 	return scanner.Err()
 }

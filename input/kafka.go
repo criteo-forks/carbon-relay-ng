@@ -33,7 +33,6 @@ type Kafka struct {
 	contexts map[int32]PartitionContext
 	ctx      context.Context
 	closed   chan bool
-	logger   *zap.Logger
 }
 
 func (k *Kafka) Name() string {
@@ -109,7 +108,7 @@ func NewKafka(brokers []string, topic string, consumerGroup string, kafkaConfig 
 	}
 
 	return &Kafka{
-		BaseInput:    BaseInput{handler: h, name: fmt.Sprintf("kafka[topic=%s;cg=%s;id=%s]", topic, consumerGroup, kafkaConfig.ClientID)},
+		BaseInput:    BaseInput{handler: h, name: fmt.Sprintf("kafka[topic=%s;cg=%s;id=%s]", topic, consumerGroup, kafkaConfig.ClientID), logger: logger},
 		config:       kafkaConfig,
 		topic:        topic,
 		client:       client,
@@ -117,7 +116,6 @@ func NewKafka(brokers []string, topic string, consumerGroup string, kafkaConfig 
 		groupID:      consumerGroup,
 		ctx:          context.Background(),
 		closed:       make(chan bool),
-		logger:       logger,
 		enableTags:   enableTags,
 		resetOffsets: resetOffsets,
 		contexts:     make(map[int32]PartitionContext),
