@@ -296,7 +296,7 @@ func (tE *TestEndpoint) handle(c net.Conn) {
 		c.Close()
 	}()
 	r := bufio.NewReaderSize(c, 4096)
-	h := encoding.NewPlain(false)
+	h := encoding.NewPlain(false, 0)
 	for {
 		select {
 		case <-tE.shutdownHandle:

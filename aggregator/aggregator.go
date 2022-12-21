@@ -196,9 +196,9 @@ func (a *Aggregator) AddMaybe(dp encoding.Datapoint) bool {
 	return a.DropRaw
 }
 
-//PreMatch checks if the specified metric matches the specified prefix and/or substring
-//If prefix isn't explicitly specified it will be derived from the regex where possible.
-//If this returns false the metric will not be passed through to the main regex matching stage.
+// PreMatch checks if the specified metric matches the specified prefix and/or substring
+// If prefix isn't explicitly specified it will be derived from the regex where possible.
+// If this returns false the metric will not be passed through to the main regex matching stage.
 func (a *Aggregator) PreMatchString(s string) bool {
 	if len(a.Prefix) > 0 && !strings.HasPrefix(s, a.Prefix) {
 		return false
@@ -225,7 +225,6 @@ type CacheEntry struct {
 	seen  uint32
 }
 
-//
 func (a *Aggregator) match(key []byte) (string, bool) {
 	var dst []byte
 	matches := a.regex.FindSubmatchIndex(key)
