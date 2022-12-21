@@ -9,3 +9,13 @@ the usual metric format: `<metric path> <metric value> <metric timestamp>`. An e
 queue will automatically be created and bound to the exchange, which carbon-relay-ng will consume from.
 
 
+## Listen text input
+
+setting              | mandatory | values   | default | description
+---------------------|-----------|----------|---------|------------
+format               | N         | string   | plain   |Only plain is implemented
+strict               | N         | bool     | false   |unused
+max_length           | N         | Int      | 0       |drop metrics with name above value
+workers              | N         | Int      | 0       |number of workers
+listen_addr          | Y         | String   | 1000    |listen_address
+read_timeout         | N         | int (ms) | 10k     |read timeout

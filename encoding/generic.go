@@ -3,7 +3,8 @@ package encoding
 import "fmt"
 
 type FormatOptions struct {
-	Strict bool `mapstructure:"strict,omitempty"`
+	Strict    bool `mapstructure:"strict,omitempty"`
+	MaxLength int  `mapstructure:"max_length,omitempty"`
 }
 
 type FormatAdapter interface {
@@ -18,7 +19,7 @@ type FormatName string
 func (f FormatName) ToHandler(fo FormatOptions) (FormatAdapter, error) {
 	switch f {
 	case PlainFormat:
-		return NewPlain(fo.Strict), nil
+		return NewPlain(fo.Strict, fo.MaxLength), nil
 	case "":
 		return nil, fmt.Errorf("`format` key can't be empty. Possible value: [plain]")
 	default:

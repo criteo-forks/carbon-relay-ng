@@ -21,17 +21,19 @@ var (
 	errFmtNullInKey           = "null char at position %d"
 	errFmtNotAscii            = "non-ascii char at position %d"
 	errIncomplete             = "incomplete graphite datapoint"
+	errTooLong                = "path too long for metric"
 )
 
 const PlainFormat FormatName = "plain"
 const dotChar uint8 = '.'
 
 type PlainAdapter struct {
-	Validate bool
+	Validate  bool
+	MaxLength int
 }
 
-func NewPlain(validate bool) PlainAdapter {
-	return PlainAdapter{Validate: validate}
+func NewPlain(validate bool, maxLength int) PlainAdapter {
+	return PlainAdapter{Validate: validate, MaxLength: maxLength}
 }
 
 func (p PlainAdapter) parseKey(firstPartDataPoint string) (string, error) {
@@ -71,7 +73,7 @@ func parseMetricPath(key string) (string, error) {
 
 }
 
-//graphite tag follow the pattern key1=value1;key2=value2
+// graphite tag follow the pattern key1=value1;key2=value2
 func addGraphiteTagToTags(graphiteTag string, tags Tags) error {
 	for index := 0; index < len(graphiteTag); index++ { //index++ is to remove the ; char for the next iteration
 		//begin part to set the key
@@ -144,7 +146,9 @@ func (p PlainAdapter) load(msgbuf []byte, tags Tags) (Datapoint, error) {
 	if firstSpace == len(msg)-1 {
 		return d, fmt.Errorf(errIncomplete)
 	}
-
+	if p.MaxLength > 0 && firstSpace >= p.MaxLength {
+		return d, fmt.Errorf(errTooLong)
+	}
 	var err error
 	d.Name, err = p.parseKey(msg[start:firstSpace])
 	if err != nil {
@@ -190,4 +194,11 @@ func (p PlainAdapter) load(msgbuf []byte, tags Tags) (Datapoint, error) {
 		return d, err
 	}
 	return d, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

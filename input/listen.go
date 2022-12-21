@@ -25,7 +25,6 @@ type Listener struct {
 	udpWorkers  []udpWorker
 	shutdown    chan struct{}
 	HandleConn  func(l *Listener, c net.Conn)
-	logger      *zap.Logger
 	instance    string
 }
 
@@ -51,7 +50,7 @@ type udpWorker struct {
 // NewListener creates a new listener.
 func NewListener(addr string, readTimeout time.Duration, TCPWorkerCount int, UDPWorkerCount int, handler encoding.FormatAdapter, instance string) *Listener {
 	return &Listener{
-		BaseInput:   BaseInput{handler: handler, name: addr},
+		BaseInput:   BaseInput{handler: handler, name: addr, logger: zap.L().With(zap.String("localAddress", addr), zap.String("kind", handler.KindS()))},
 		kind:        handler.KindS(),
 		addr:        addr,
 		readTimeout: readTimeout,
@@ -59,7 +58,6 @@ func NewListener(addr string, readTimeout time.Duration, TCPWorkerCount int, UDP
 		HandleConn:  handleConn,
 		udpWorkers:  make([]udpWorker, UDPWorkerCount),
 		tcpWorkers:  make([]tcpWorker, TCPWorkerCount),
-		logger:      zap.L().With(zap.String("localAddress", addr), zap.String("kind", handler.KindS())),
 		instance:    instance,
 	}
 }
