@@ -6,6 +6,9 @@ on:
     tags:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
+env:
+  TAG_NAME: ${{github.ref_name}}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,8 +25,9 @@ jobs:
         run: make test
       - name: Bundle
         run: |
-          tar cvzf carbon-relay-ng-${{github.ref_name}}-linux-amd64.tar.gz carbon-relay-ng
+          tar cvzf carbon-relay-ng-${TAG_NAME:1}-linux-amd64.tar.gz carbon-relay-ng
           echo `sha256sum carbon-relay-ng-*.tar.gz` > sha256
+          echo "VERSION=${TAG_NAME#v}" >> $GITHUB_ENV
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -41,8 +45,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./carbon-relay-ng-${{github.ref_name}}-linux-amd64.tar.gz
-          asset_name: carbon-relay-ng-${{github.ref_name}}-linux-amd64.tar.gz
+          asset_path: ./carbon-relay-ng-${{env.VERSION}}-linux-amd64.tar.gz
+          asset_name: carbon-relay-ng-${{env.VERSION}}-linux-amd64.tar.gz
           asset_content_type: application/zip
       - name: Upload Release Asset checksum
         id: upload-release-asset-checksum
