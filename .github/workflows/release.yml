@@ -58,3 +58,4 @@ jobs:
           asset_path: ./sha256
           asset_name: sha256
           asset_content_type: text
+
