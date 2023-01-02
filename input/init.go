@@ -3,6 +3,7 @@ package input
 import (
 	"bufio"
 	"fmt"
+	"github.com/graphite-ng/carbon-relay-ng/metrics"
 	"go.uber.org/zap"
 	"io"
 
@@ -60,6 +61,7 @@ func (b *BaseInput) handle(msg []byte, tags encoding.Tags) error {
 	}
 	d, err := b.handler.Load(msg, tags)
 	if err != nil {
+		metrics.DroppedMetrics.WithLabelValues(err.Error()).Inc()
 		return fmt.Errorf("error while processing `%s`: %s", string(truncate(msg)), err)
 	}
 	b.Dispatcher.Dispatch(d)
