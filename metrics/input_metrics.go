@@ -11,3 +11,7 @@ var (
 		Help: "The total number of metrics dropped at input",
 	}, []string{"error"})
 )
+
+func registerInputMetrics(registry *SafeRegistry) {
+	registry.MustRegister(DroppedMetrics)
+}
