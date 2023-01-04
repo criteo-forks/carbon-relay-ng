@@ -32,4 +32,5 @@ func init() {
 	prometheus.DefaultRegisterer = sr
 	prometheus.DefaultGatherer = sr
 	sr.MustRegister(prometheus.NewGoCollector())
+	registerInputMetrics(sr)
 }
