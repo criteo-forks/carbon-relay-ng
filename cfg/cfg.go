@@ -65,6 +65,7 @@ type Route struct {
 	Substr       string   `toml:"substr,omitempty"`
 	Regex        string   `toml:"regex,omitempty"`
 	Destinations []string `toml:"destinations,omitempty"`
+	MetricSuffix string   `toml:"metric_suffix,omitempty"`
 
 	// grafanaNet & kafkaMdm & Google PubSub
 	SchemasFile  string `toml:"schemas_file,omitempty"`

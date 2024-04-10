@@ -575,7 +575,6 @@ func (table *Table) InitCmd(config cfg.Config) error {
 			return fmt.Errorf("could not apply init cmd #%d", i+1)
 		}
 	}
-
 	return nil
 }
 
@@ -656,7 +655,7 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				return fmt.Errorf("must get at least 1 destination for route '%s'", routeConfig.Key)
 			}
 
-			route, err := route.NewSendAllMatch(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, destinations)
+			route, err := route.NewSendAllMatch(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, destinations, routeConfig.MetricSuffix)
 			if err != nil {
 				routeConfigLogger.Error("error adding route", zap.Error(err))
 				return fmt.Errorf("error adding route '%s'", routeConfig.Key)
@@ -672,7 +671,7 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				return fmt.Errorf("must get at least 1 destination for route '%s'", routeConfig.Key)
 			}
 
-			route, err := route.NewSendFirstMatch(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, destinations)
+			route, err := route.NewSendFirstMatch(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, destinations, routeConfig.MetricSuffix)
 			if err != nil {
 				routeConfigLogger.Error("error adding route", zap.Error(err))
 				return fmt.Errorf("error adding route '%s'", routeConfig.Key)
@@ -693,7 +692,7 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				return fmt.Errorf("can't create the routing mutator: %s", err)
 			}
 
-			route, err := route.NewConsistentHashing(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, destinations, routingMutator)
+			route, err := route.NewConsistentHashing(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, destinations, routingMutator, routeConfig.MetricSuffix)
 			if err != nil {
 				routeConfigLogger.Error("error adding route", zap.Error(err))
 				return fmt.Errorf("error adding route '%s'", routeConfig.Key)
@@ -750,7 +749,7 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 				return fmt.Errorf("can't create the routing mutator: %s", err)
 			}
 
-			route, err := route.NewKafkaRoute(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, writerConfig, routingMutator)
+			route, err := route.NewKafkaRoute(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, writerConfig, routingMutator, routeConfig.MetricSuffix)
 			if err != nil {
 				return fmt.Errorf("Failed to create route: %s", err)
 			}
@@ -835,7 +834,7 @@ func (table *Table) InitRoutes(config cfg.Config, meta toml.MetaData) error {
 			if err != nil {
 				return fmt.Errorf("error adding route '%s': %s", routeConfig.Key, err)
 			}
-			route, err := route.NewBgMetadataRoute(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, bgMetadataCfg.StorageAggregationConfig, bgMetadataCfg.StorageSchemasConfig, bloomFilterConfig, bgMetadataCfg.Storage, additionnalCfg)
+			route, err := route.NewBgMetadataRoute(routeConfig.Key, routeConfig.Prefix, routeConfig.Substr, routeConfig.Regex, bgMetadataCfg.StorageAggregationConfig, bgMetadataCfg.StorageSchemasConfig, bloomFilterConfig, bgMetadataCfg.Storage, additionnalCfg, routeConfig.MetricSuffix)
 			if err != nil {
 				return fmt.Errorf("error adding route '%s': %s", routeConfig.Key, err)
 			}

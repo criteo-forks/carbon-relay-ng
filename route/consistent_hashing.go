@@ -18,14 +18,14 @@ type ConsistentHashing struct {
 	Mutator *RoutingMutator
 }
 
-func NewConsistentHashing(key, prefix, sub, regex string, destinations []*dest.Destination, routingMutator *RoutingMutator) (*ConsistentHashing, error) {
+func NewConsistentHashing(key, prefix, sub, regex string, destinations []*dest.Destination, routingMutator *RoutingMutator, metricSuffix string) (*ConsistentHashing, error) {
 	m, err := matcher.New(prefix, sub, regex)
 	if err != nil {
 		return nil, err
 	}
 	ring := hashring.New(nil)
 	r := &ConsistentHashing{
-		*newBaseRoute(key, "ConsistentHashing"),
+		*newBaseRoute(key, "ConsistentHashing", metricSuffix),
 		ring,
 		routingMutator,
 	}
@@ -99,6 +99,9 @@ func (cs *ConsistentHashing) Dispatch(dp encoding.Datapoint) {
 	cs.logger.Debug("route sending to dest",
 		zap.String("destinationKey", dest.Key),
 		zap.String("metricName", dp.Name))
+	if cs.metricSuffix != "" {
+		dp.Name += cs.metricSuffix
+	}
 	dest.In <- dp
 	cs.baseRoute.rm.OutMetrics.Inc()
 }

@@ -157,6 +157,7 @@ func parseRouteRequest(r *http.Request) (route.Route, *handlerError) {
 		Substring            string
 		Regex                string
 		Address              string
+		MetricSuffix         string
 		Spool                bool
 		Pickle               bool
 		periodFlush          int
@@ -201,9 +202,9 @@ func parseRouteRequest(r *http.Request) (route.Route, *handlerError) {
 	var e error
 	switch req.Type {
 	case "sendAllMatch":
-		ro, e = route.NewSendAllMatch(req.Key, req.Prefix, req.Substring, req.Regex, []*destination.Destination{dest})
+		ro, e = route.NewSendAllMatch(req.Key, req.Prefix, req.Substring, req.Regex, []*destination.Destination{dest}, req.MetricSuffix)
 	case "sendFirstMatch":
-		ro, e = route.NewSendFirstMatch(req.Key, req.Prefix, req.Substring, req.Regex, []*destination.Destination{dest})
+		ro, e = route.NewSendFirstMatch(req.Key, req.Prefix, req.Substring, req.Regex, []*destination.Destination{dest}, req.MetricSuffix)
 	default:
 		return nil, &handlerError{nil, "unknown route type: " + req.Type, http.StatusBadRequest}
 	}

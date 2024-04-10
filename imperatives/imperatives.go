@@ -49,6 +49,7 @@ const (
 	optBlocking
 	optSub
 	optRegex
+	optMetricSuffix
 	optFlush
 	optReconn
 	optConnBufSize
@@ -340,14 +341,14 @@ func readAddBlack(s *toki.Scanner, table Table) error {
 	return nil
 }
 
-func readAddRoute(s *toki.Scanner, table Table, constructor func(key, prefix, sub, regex string, destinations []*destination.Destination) (route.Route, error)) error {
+func readAddRoute(s *toki.Scanner, table Table, constructor func(key, prefix, sub, regex string, destinations []*destination.Destination, metricSuffix string) (route.Route, error)) error {
 	t := s.Next()
 	if t.Token != word {
 		return errFmtAddRoute
 	}
 	key := string(t.Value)
 
-	prefix, sub, regex, err := readRouteOpts(s)
+	prefix, sub, regex, metricSuffix, err := readRouteOpts(s)
 	if err != nil {
 		return err
 	}
@@ -360,7 +361,7 @@ func readAddRoute(s *toki.Scanner, table Table, constructor func(key, prefix, su
 		return fmt.Errorf("must get at least 1 destination for route '%s'", key)
 	}
 
-	route, err := constructor(key, prefix, sub, regex, destinations)
+	route, err := constructor(key, prefix, sub, regex, destinations, metricSuffix)
 	if err != nil {
 		return err
 	}
@@ -375,7 +376,7 @@ func readAddRouteConsistentHashing(s *toki.Scanner, table Table) error {
 	}
 	key := string(t.Value)
 
-	prefix, sub, regex, err := readRouteOpts(s)
+	prefix, sub, regex, metricSuffix, err := readRouteOpts(s)
 	if err != nil {
 		return err
 	}
@@ -388,7 +389,7 @@ func readAddRouteConsistentHashing(s *toki.Scanner, table Table) error {
 		return fmt.Errorf("must get at least 2 destination for route '%s'", key)
 	}
 
-	route, err := route.NewConsistentHashing(key, prefix, sub, regex, destinations, nil)
+	route, err := route.NewConsistentHashing(key, prefix, sub, regex, destinations, nil, metricSuffix)
 	if err != nil {
 		return err
 	}
@@ -723,33 +724,38 @@ func ParseDestinations(destinationConfigs []string, table Table, allowMatcher bo
 	return destinations, nil
 }
 
-func readRouteOpts(s *toki.Scanner) (prefix, sub, regex string, err error) {
+func readRouteOpts(s *toki.Scanner) (prefix, sub, regex, metric_suffix string, err error) {
 	for {
 		t := s.Next()
 		switch t.Token {
 		case toki.EOF:
 			return
 		case toki.Error:
-			return "", "", "", errors.New("read the error token instead of one i recognize")
+			return "", "", "", "", errors.New("read the error token instead of one i recognize")
 		case optPrefix:
 			if t = s.Next(); t.Token != word {
-				return "", "", "", errors.New("bad prefix option")
+				return "", "", "", "", errors.New("bad prefix option")
 			}
 			prefix = string(t.Value)
 		case optSub:
 			if t = s.Next(); t.Token != word {
-				return "", "", "", errors.New("bad sub option")
+				return "", "", "", "", errors.New("bad sub option")
 			}
 			sub = string(t.Value)
 		case optRegex:
 			if t = s.Next(); t.Token != word {
-				return "", "", "", errors.New("bad regex option")
+				return "", "", "", "", errors.New("bad regex option")
 			}
 			regex = string(t.Value)
+		case optMetricSuffix:
+			if t = s.Next(); t.Token != word {
+				return "", "", "", "", errors.New("bad metric_suffix option")
+			}
+			metric_suffix = string(t.Value)
 		case sep:
 			return
 		default:
-			return "", "", "", fmt.Errorf("unrecognized option '%s'", t.Value)
+			return "", "", "", "", fmt.Errorf("unrecognized option '%s'", t.Value)
 		}
 	}
 }
