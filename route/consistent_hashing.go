@@ -18,8 +18,8 @@ type ConsistentHashing struct {
 	Mutator *RoutingMutator
 }
 
-func NewConsistentHashing(key, prefix, sub, regex string, destinations []*dest.Destination, routingMutator *RoutingMutator, metricSuffix string) (*ConsistentHashing, error) {
-	m, err := matcher.New(prefix, sub, regex)
+func NewConsistentHashing(key, prefix, sub, regex, notRegex string, destinations []*dest.Destination, routingMutator *RoutingMutator, metricSuffix string) (*ConsistentHashing, error) {
+	m, err := matcher.New(prefix, sub, regex, notRegex)
 	if err != nil {
 		return nil, err
 	}

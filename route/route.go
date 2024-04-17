@@ -96,8 +96,8 @@ type SendFirstMatch struct {
 
 // NewSendAllMatch creates a sendAllMatch route.
 // We will automatically run the route and the given destinations
-func NewSendAllMatch(key, prefix, sub, regex string, destinations []*dest.Destination, metric_suffix string) (Route, error) {
-	m, err := matcher.New(prefix, sub, regex)
+func NewSendAllMatch(key, prefix, sub, regex, notRegex string, destinations []*dest.Destination, metric_suffix string) (Route, error) {
+	m, err := matcher.New(prefix, sub, regex, notRegex)
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +109,8 @@ func NewSendAllMatch(key, prefix, sub, regex string, destinations []*dest.Destin
 
 // NewSendFirstMatch creates a sendFirstMatch route.
 // We will automatically run the route and the given destinations
-func NewSendFirstMatch(key, prefix, sub, regex string, destinations []*dest.Destination, metricSuffix string) (Route, error) {
-	m, err := matcher.New(prefix, sub, regex)
+func NewSendFirstMatch(key, prefix, sub, regex, notRegex string, destinations []*dest.Destination, metricSuffix string) (Route, error) {
+	m, err := matcher.New(prefix, sub, regex, notRegex)
 	if err != nil {
 		return nil, err
 	}
@@ -326,6 +326,7 @@ func (route *baseRoute) update(opts map[string]string, extendConfig baseCfgExten
 	prefix := match.Prefix
 	sub := match.Sub
 	regex := match.Regex
+	notRegex := match.NotRegex
 	updateMatcher := false
 
 	for name, val := range opts {
@@ -339,12 +340,15 @@ func (route *baseRoute) update(opts map[string]string, extendConfig baseCfgExten
 		case "regex":
 			regex = val
 			updateMatcher = true
+		case "notRegex":
+			notRegex = val
+			updateMatcher = true
 		default:
 			return fmt.Errorf("no such option '%s'", name)
 		}
 	}
 	if updateMatcher {
-		match, err := matcher.New(prefix, sub, regex)
+		match, err := matcher.New(prefix, sub, regex, notRegex)
 		if err != nil {
 			return err
 		}

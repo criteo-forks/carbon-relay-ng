@@ -65,8 +65,8 @@ type Destination struct {
 }
 
 // New creates a destination object. Note that it still needs to be told to run via Run().
-func New(routeName, prefix, sub, regex, addr, spoolDir string, spool, pickle bool, periodFlush, periodReConn time.Duration, connBufSize, ioBufSize, spoolBufSize int, spoolMaxBytesPerFile, spoolSyncEvery int64, spoolSyncPeriod, spoolSleep, unspoolSleep time.Duration) (*Destination, error) {
-	m, err := matcher.New(prefix, sub, regex)
+func New(routeName, prefix, sub, regex, notRegex, addr, spoolDir string, spool, pickle bool, periodFlush, periodReConn time.Duration, connBufSize, ioBufSize, spoolBufSize int, spoolMaxBytesPerFile, spoolSyncEvery int64, spoolSyncPeriod, spoolSleep, unspoolSleep time.Duration) (*Destination, error) {
+	m, err := matcher.New(prefix, sub, regex, notRegex)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +115,7 @@ func (dest *Destination) Update(opts map[string]string) error {
 	prefix := match.Prefix
 	sub := match.Sub
 	regex := match.Regex
+	notRegex := match.NotRegex
 	updateMatcher := false
 	addr := ""
 
@@ -131,6 +132,9 @@ func (dest *Destination) Update(opts map[string]string) error {
 		case "regex":
 			regex = val
 			updateMatcher = true
+		case "notRegex":
+			notRegex = val
+			updateMatcher = true
 		default:
 			return errors.New("no such option: " + name)
 		}
@@ -139,7 +143,7 @@ func (dest *Destination) Update(opts map[string]string) error {
 		dest.updateConn(addr)
 	}
 	if updateMatcher {
-		match, err := matcher.New(prefix, sub, regex)
+		match, err := matcher.New(prefix, sub, regex, notRegex)
 		if err != nil {
 			return err
 		}

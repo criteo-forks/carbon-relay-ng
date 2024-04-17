@@ -7,19 +7,21 @@ import (
 )
 
 type Matcher struct {
-	Prefix string `json:"prefix,omitempty"`
-	Sub    string `json:"substring,omitempty"`
-	Regex  string `json:"regex,omitempty"`
+	Prefix   string `json:"prefix,omitempty"`
+	Sub      string `json:"substring,omitempty"`
+	Regex    string `json:"regex,omitempty"`
+	NotRegex string `json:"notRegex,omitempty"`
 	// internal representation for performance optimalization
 	prefix, substring []byte
-	regex             *regexp.Regexp // compiled version of Regex
+	regex, notRegex   *regexp.Regexp // compiled version of Regex
 }
 
-func New(prefix, sub, regex string) (*Matcher, error) {
+func New(prefix, sub, regex, notRegex string) (*Matcher, error) {
 	match := new(Matcher)
 	match.Prefix = prefix
 	match.Sub = sub
 	match.Regex = regex
+	match.NotRegex = notRegex
 	err := match.updateInternals()
 	if err != nil {
 		return nil, err
@@ -41,6 +43,13 @@ func (m *Matcher) updateInternals() error {
 		}
 		m.regex = regexObj
 	}
+	if len(m.NotRegex) > 0 {
+		regexObj, err := regexp.Compile(m.NotRegex)
+		if err != nil {
+			return err
+		}
+		m.notRegex = regexObj
+	}
 	return nil
 }
 
@@ -56,6 +65,9 @@ func (m *Matcher) Match(s []byte) bool {
 		return false
 	}
 	if m.regex != nil && !m.regex.Match(s) {
+		return false
+	}
+	if m.notRegex != nil && m.notRegex.Match(s) {
 		return false
 	}
 	return true

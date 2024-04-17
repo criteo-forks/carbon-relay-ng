@@ -64,6 +64,7 @@ type Route struct {
 	Prefix       string   `toml:"prefix,omitempty"`
 	Substr       string   `toml:"substr,omitempty"`
 	Regex        string   `toml:"regex,omitempty"`
+	NotRegex     string   `toml:"notRegex,omitempty"`
 	Destinations []string `toml:"destinations,omitempty"`
 	MetricSuffix string   `toml:"metric_suffix,omitempty"`
 

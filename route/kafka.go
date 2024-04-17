@@ -18,7 +18,7 @@ type Kafka struct {
 	ctx    context.Context
 }
 
-func NewKafkaRoute(key, prefix, sub, regex string, config kafka.WriterConfig, routingMutator *RoutingMutator, metricSuffix string) (*Kafka, error) {
+func NewKafkaRoute(key, prefix, sub, regex, notRegex string, config kafka.WriterConfig, routingMutator *RoutingMutator, metricSuffix string) (*Kafka, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %s", err)
 	}
@@ -35,7 +35,7 @@ func NewKafkaRoute(key, prefix, sub, regex string, config kafka.WriterConfig, ro
 	k.logger = k.logger.With(zap.String("kafka_topic", config.Topic))
 
 	// Don't remember why it's required
-	m, err := matcher.New(prefix, sub, regex)
+	m, err := matcher.New(prefix, sub, regex, notRegex)
 	if err != nil {
 		return nil, err
 	}

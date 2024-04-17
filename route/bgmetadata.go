@@ -82,7 +82,7 @@ func NewBloomFilterConfig(n uint, p float64, shardingFactor int, cache string, c
 
 // NewBgMetadataRoute creates BgMetadata, starts sharding and filtering incoming metrics.
 // additionnalCfg should be nil or *cfg.BgMetadataESConfig if elasticsearch
-func NewBgMetadataRoute(key, prefix, sub, regex, aggregationCfg, schemasCfg string, bfCfg BloomFilterConfig, storageName string, additionnalCfg interface{}, metricSuffix string) (*BgMetadata, error) {
+func NewBgMetadataRoute(key, prefix, sub, regex, notRegex, aggregationCfg, schemasCfg string, bfCfg BloomFilterConfig, storageName string, additionnalCfg interface{}, metricSuffix string) (*BgMetadata, error) {
 	// to make value assignments easier
 	var err error
 
@@ -166,7 +166,7 @@ func NewBgMetadataRoute(key, prefix, sub, regex, aggregationCfg, schemasCfg stri
 	}
 
 	// matcher required to initialise route.Config for routing table, othewise it will panic
-	mt, err := matcher.New(prefix, sub, regex)
+	mt, err := matcher.New(prefix, sub, regex, notRegex)
 	if err != nil {
 		return nil, err
 	}

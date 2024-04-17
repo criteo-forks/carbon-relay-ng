@@ -49,6 +49,7 @@ const (
 	optBlocking
 	optSub
 	optRegex
+	optNotRegex
 	optMetricSuffix
 	optFlush
 	optReconn
@@ -103,6 +104,7 @@ var tokens = []toki.Def{
 	{Token: optBlocking, Pattern: "blocking="},
 	{Token: optSub, Pattern: "sub="},
 	{Token: optRegex, Pattern: "regex="},
+	{Token: optNotRegex, Pattern: "notRegex="},
 	{Token: optFlush, Pattern: "flush="},
 	{Token: optReconn, Pattern: "reconn="},
 	{Token: optConnBufSize, Pattern: "connbuf="},
@@ -308,6 +310,7 @@ func readAddBlack(s *toki.Scanner, table Table) error {
 	prefix := ""
 	sub := ""
 	regex := ""
+	notRegex := ""
 	t := s.Next()
 	if t.Token != word {
 		return errFmtAddBlack
@@ -329,11 +332,16 @@ func readAddBlack(s *toki.Scanner, table Table) error {
 			return errFmtAddBlack
 		}
 		regex = string(t.Value)
+	case "notRegex":
+		if t = s.Next(); t.Token != word {
+			return errFmtAddBlack
+		}
+		notRegex = string(t.Value)
 	default:
 		return errFmtAddBlack
 	}
 
-	m, err := matcher.New(prefix, sub, regex)
+	m, err := matcher.New(prefix, sub, regex, notRegex)
 	if err != nil {
 		return err
 	}
@@ -341,14 +349,14 @@ func readAddBlack(s *toki.Scanner, table Table) error {
 	return nil
 }
 
-func readAddRoute(s *toki.Scanner, table Table, constructor func(key, prefix, sub, regex string, destinations []*destination.Destination, metricSuffix string) (route.Route, error)) error {
+func readAddRoute(s *toki.Scanner, table Table, constructor func(key, prefix, sub, regex, notRegex string, destinations []*destination.Destination, metricSuffix string) (route.Route, error)) error {
 	t := s.Next()
 	if t.Token != word {
 		return errFmtAddRoute
 	}
 	key := string(t.Value)
 
-	prefix, sub, regex, metricSuffix, err := readRouteOpts(s)
+	prefix, sub, regex, notRegex, metricSuffix, err := readRouteOpts(s)
 	if err != nil {
 		return err
 	}
@@ -361,7 +369,7 @@ func readAddRoute(s *toki.Scanner, table Table, constructor func(key, prefix, su
 		return fmt.Errorf("must get at least 1 destination for route '%s'", key)
 	}
 
-	route, err := constructor(key, prefix, sub, regex, destinations, metricSuffix)
+	route, err := constructor(key, prefix, sub, regex, notRegex, destinations, metricSuffix)
 	if err != nil {
 		return err
 	}
@@ -376,7 +384,7 @@ func readAddRouteConsistentHashing(s *toki.Scanner, table Table) error {
 	}
 	key := string(t.Value)
 
-	prefix, sub, regex, metricSuffix, err := readRouteOpts(s)
+	prefix, sub, regex, notRegex, metricSuffix, err := readRouteOpts(s)
 	if err != nil {
 		return err
 	}
@@ -389,7 +397,7 @@ func readAddRouteConsistentHashing(s *toki.Scanner, table Table) error {
 		return fmt.Errorf("must get at least 2 destination for route '%s'", key)
 	}
 
-	route, err := route.NewConsistentHashing(key, prefix, sub, regex, destinations, nil, metricSuffix)
+	route, err := route.NewConsistentHashing(key, prefix, sub, regex, notRegex, destinations, nil, metricSuffix)
 	if err != nil {
 		return err
 	}
@@ -554,7 +562,7 @@ func readDestinations(s *toki.Scanner, table Table, allowMatcher bool, routeKey 
 }
 
 func readDestination(s *toki.Scanner, table Table, allowMatcher bool, routeKey string) (dest *destination.Destination, err error) {
-	var prefix, sub, regex, addr, spoolDir string
+	var prefix, sub, regex, notRegex, addr, spoolDir string
 	var spool, pickle bool
 	flush := 1000
 	reconn := 10000
@@ -593,6 +601,11 @@ func readDestination(s *toki.Scanner, table Table, allowMatcher bool, routeKey s
 				return nil, errFmtAddRoute
 			}
 			regex = string(t.Value)
+		case optNotRegex:
+			if t = s.Next(); t.Token != word {
+				return nil, errFmtAddRoute
+			}
+			notRegex = string(t.Value)
 		case optFlush:
 			if t = s.Next(); t.Token != num {
 				return nil, errFmtAddRoute
@@ -707,7 +720,7 @@ func readDestination(s *toki.Scanner, table Table, allowMatcher bool, routeKey s
 	if !allowMatcher && (prefix != "" || sub != "" || regex != "") {
 		return nil, fmt.Errorf("matching options (prefix, sub, and regex) not allowed for this route type")
 	}
-	return destination.New(routeKey, prefix, sub, regex, addr, spoolDir, spool, pickle, periodFlush, periodReConn, connBufSize, ioBufSize, spoolBufSize, spoolMaxBytesPerFile, spoolSyncEvery, spoolSyncPeriod, spoolSleep, unspoolSleep)
+	return destination.New(routeKey, prefix, sub, regex, notRegex, addr, spoolDir, spool, pickle, periodFlush, periodReConn, connBufSize, ioBufSize, spoolBufSize, spoolMaxBytesPerFile, spoolSyncEvery, spoolSyncPeriod, spoolSleep, unspoolSleep)
 }
 
 func ParseDestinations(destinationConfigs []string, table Table, allowMatcher bool, routeKey string) (destinations []*destination.Destination, err error) {
@@ -724,38 +737,43 @@ func ParseDestinations(destinationConfigs []string, table Table, allowMatcher bo
 	return destinations, nil
 }
 
-func readRouteOpts(s *toki.Scanner) (prefix, sub, regex, metric_suffix string, err error) {
+func readRouteOpts(s *toki.Scanner) (prefix, sub, regex, notRegex, metric_suffix string, err error) {
 	for {
 		t := s.Next()
 		switch t.Token {
 		case toki.EOF:
 			return
 		case toki.Error:
-			return "", "", "", "", errors.New("read the error token instead of one i recognize")
+			return "", "", "", "", "", errors.New("read the error token instead of one i recognize")
 		case optPrefix:
 			if t = s.Next(); t.Token != word {
-				return "", "", "", "", errors.New("bad prefix option")
+				return "", "", "", "", "", errors.New("bad prefix option")
 			}
 			prefix = string(t.Value)
 		case optSub:
 			if t = s.Next(); t.Token != word {
-				return "", "", "", "", errors.New("bad sub option")
+				return "", "", "", "", "", errors.New("bad sub option")
 			}
 			sub = string(t.Value)
 		case optRegex:
 			if t = s.Next(); t.Token != word {
-				return "", "", "", "", errors.New("bad regex option")
+				return "", "", "", "", "", errors.New("bad regex option")
 			}
 			regex = string(t.Value)
+		case optNotRegex:
+			if t = s.Next(); t.Token != word {
+				return "", "", "", "", "", errors.New("bad regex option")
+			}
+			notRegex = string(t.Value)
 		case optMetricSuffix:
 			if t = s.Next(); t.Token != word {
-				return "", "", "", "", errors.New("bad metric_suffix option")
+				return "", "", "", "", "", errors.New("bad metric_suffix option")
 			}
 			metric_suffix = string(t.Value)
 		case sep:
 			return
 		default:
-			return "", "", "", "", fmt.Errorf("unrecognized option '%s'", t.Value)
+			return "", "", "", "", "", fmt.Errorf("unrecognized option '%s'", t.Value)
 		}
 	}
 }
