@@ -65,14 +65,15 @@ type baseRoute struct {
 	sync.Mutex              // only needed for the multiple writers
 	config     atomic.Value // for reading and writing
 
-	key       string
-	routeType string
-	rm        *metrics.RouteMetrics
-	destMap   map[string]*dest.Destination
-	logger    *zap.Logger
+	key          string
+	routeType    string
+	rm           *metrics.RouteMetrics
+	destMap      map[string]*dest.Destination
+	logger       *zap.Logger
+	metricSuffix string
 }
 
-func newBaseRoute(key, routeType string) *baseRoute {
+func newBaseRoute(key, routeType, metricSuffix string) *baseRoute {
 	return &baseRoute{
 		sync.Mutex{},
 		atomic.Value{},
@@ -81,6 +82,7 @@ func newBaseRoute(key, routeType string) *baseRoute {
 		metrics.NewRouteMetrics(key, routeType, nil),
 		map[string]*dest.Destination{},
 		zap.L().With(zap.String("routekey", key), zap.String("route_type", routeType)),
+		metricSuffix,
 	}
 }
 
@@ -94,12 +96,12 @@ type SendFirstMatch struct {
 
 // NewSendAllMatch creates a sendAllMatch route.
 // We will automatically run the route and the given destinations
-func NewSendAllMatch(key, prefix, sub, regex string, destinations []*dest.Destination) (Route, error) {
-	m, err := matcher.New(prefix, sub, regex)
+func NewSendAllMatch(key, prefix, sub, regex, notRegex string, destinations []*dest.Destination, metric_suffix string) (Route, error) {
+	m, err := matcher.New(prefix, sub, regex, notRegex)
 	if err != nil {
 		return nil, err
 	}
-	r := &SendAllMatch{*newBaseRoute(key, "SendAllMatch")}
+	r := &SendAllMatch{*newBaseRoute(key, "SendAllMatch", metric_suffix)}
 	r.config.Store(baseConfig{*m, destinations})
 	r.run()
 	return r, nil
@@ -107,12 +109,12 @@ func NewSendAllMatch(key, prefix, sub, regex string, destinations []*dest.Destin
 
 // NewSendFirstMatch creates a sendFirstMatch route.
 // We will automatically run the route and the given destinations
-func NewSendFirstMatch(key, prefix, sub, regex string, destinations []*dest.Destination) (Route, error) {
-	m, err := matcher.New(prefix, sub, regex)
+func NewSendFirstMatch(key, prefix, sub, regex, notRegex string, destinations []*dest.Destination, metricSuffix string) (Route, error) {
+	m, err := matcher.New(prefix, sub, regex, notRegex)
 	if err != nil {
 		return nil, err
 	}
-	r := &SendFirstMatch{*newBaseRoute(key, "SendFirstMatch")}
+	r := &SendFirstMatch{*newBaseRoute(key, "SendFirstMatch", metricSuffix)}
 	r.config.Store(baseConfig{*m, destinations})
 	r.run()
 	return r, nil
@@ -126,7 +128,9 @@ func (route *baseRoute) run() {
 
 func (route *SendAllMatch) Dispatch(d encoding.Datapoint) {
 	conf := route.config.Load().(Config)
-
+	if route.metricSuffix != "" {
+		d.Name += route.metricSuffix
+	}
 	for _, dest := range conf.Dests() {
 		if dest.MatchString(d.Name) {
 			// dest should handle this as quickly as it can
@@ -139,7 +143,9 @@ func (route *SendAllMatch) Dispatch(d encoding.Datapoint) {
 
 func (route *SendFirstMatch) Dispatch(d encoding.Datapoint) {
 	conf := route.config.Load().(Config)
-
+	if route.metricSuffix != "" {
+		d.Name += route.metricSuffix
+	}
 	for _, dest := range conf.Dests() {
 		if dest.MatchString(d.Name) {
 			// dest should handle this as quickly as it can
@@ -320,6 +326,7 @@ func (route *baseRoute) update(opts map[string]string, extendConfig baseCfgExten
 	prefix := match.Prefix
 	sub := match.Sub
 	regex := match.Regex
+	notRegex := match.NotRegex
 	updateMatcher := false
 
 	for name, val := range opts {
@@ -333,12 +340,15 @@ func (route *baseRoute) update(opts map[string]string, extendConfig baseCfgExten
 		case "regex":
 			regex = val
 			updateMatcher = true
+		case "notRegex":
+			notRegex = val
+			updateMatcher = true
 		default:
 			return fmt.Errorf("no such option '%s'", name)
 		}
 	}
 	if updateMatcher {
-		match, err := matcher.New(prefix, sub, regex)
+		match, err := matcher.New(prefix, sub, regex, notRegex)
 		if err != nil {
 			return err
 		}

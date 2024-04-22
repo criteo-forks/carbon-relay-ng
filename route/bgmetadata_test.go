@@ -34,15 +34,16 @@ func testBloomFilterConfig() BloomFilterConfig {
 
 func testBgMetadata(t *testing.T) *BgMetadata {
 	const (
-		key    = "test_route"
-		prefix = ""
-		sub    = ""
-		regex  = ""
-		sch    = "../examples/storage-schemas.conf"
-		agg    = "../examples/storage-aggregation.conf"
+		key      = "test_route"
+		prefix   = ""
+		sub      = ""
+		regex    = ""
+		notRegex = ""
+		sch      = "../examples/storage-schemas.conf"
+		agg      = "../examples/storage-aggregation.conf"
 	)
 	bfc := testBloomFilterConfig()
-	m, _ := NewBgMetadataRoute(key, prefix, sub, regex, agg, sch, bfc, "testing", nil)
+	m, _ := NewBgMetadataRoute(key, prefix, sub, regex, notRegex, agg, sch, bfc, "testing", nil, "")
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 	return m
 }

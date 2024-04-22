@@ -18,12 +18,12 @@ type Kafka struct {
 	ctx    context.Context
 }
 
-func NewKafkaRoute(key, prefix, sub, regex string, config kafka.WriterConfig, routingMutator *RoutingMutator) (*Kafka, error) {
+func NewKafkaRoute(key, prefix, sub, regex, notRegex string, config kafka.WriterConfig, routingMutator *RoutingMutator, metricSuffix string) (*Kafka, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %s", err)
 	}
 	k := Kafka{
-		baseRoute: *newBaseRoute(key, "kafka"),
+		baseRoute: *newBaseRoute(key, "kafka", metricSuffix),
 		router:    routingMutator,
 		Writer:    kafka.NewWriter(config),
 		ctx:       context.TODO(),
@@ -35,7 +35,7 @@ func NewKafkaRoute(key, prefix, sub, regex string, config kafka.WriterConfig, ro
 	k.logger = k.logger.With(zap.String("kafka_topic", config.Topic))
 
 	// Don't remember why it's required
-	m, err := matcher.New(prefix, sub, regex)
+	m, err := matcher.New(prefix, sub, regex, notRegex)
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +51,9 @@ func (k *Kafka) Shutdown() error {
 
 func (k *Kafka) Dispatch(dp encoding.Datapoint) {
 	k.rm.InMetrics.Inc()
+	if k.metricSuffix != "" {
+		dp.Name += k.metricSuffix
+	}
 	key := []byte(dp.Name)
 	if newKey, ok := k.router.HandleBuf(key); ok {
 		key = newKey
