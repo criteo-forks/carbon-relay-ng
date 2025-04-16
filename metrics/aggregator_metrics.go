@@ -33,6 +33,7 @@ func NewCacheMetrics(namespace string, labels prometheus.Labels) *CacheMetrics {
 type AggregatorMetrics struct {
 	Cache                   *CacheMetrics
 	Dropped                 prometheus.Counter
+	Matched                 *prometheus.CounterVec
 	lowestTimestampCounter  prometheus.Gauge
 	highestTimestampCounter prometheus.Gauge
 	highTs                  uint32
@@ -56,6 +57,14 @@ func NewAggregatorMetrics(id string, labels prometheus.Labels) *AggregatorMetric
 		Help:        "Total number of metrics dropped because of their age",
 		ConstLabels: labels,
 	})
+
+	am.Matched = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace:   namespace,
+		Name:        "matched_metrics_total",
+		Help:        "Total number of metrics matched by the aggregator, grouped by an index in the path",
+		ConstLabels: labels,
+	}, []string{"matched_path"})
+
 	tsVec := promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace:   namespace,
 		Name:        "timestamp_value",

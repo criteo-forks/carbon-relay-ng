@@ -297,7 +297,7 @@ func readAddAgg(s *toki.Scanner, table Table) error {
 		}
 	}
 
-	agg, err := aggregator.New(fun, regex, prefix, sub, outFmt, cache, uint(interval), uint(wait), dropRaw, table.GetIn())
+	agg, err := aggregator.New(fun, regex, prefix, sub, outFmt, cache, uint(interval), uint(wait), dropRaw, table.GetIn(), false, 0)
 	if err != nil {
 		return err
 	}
