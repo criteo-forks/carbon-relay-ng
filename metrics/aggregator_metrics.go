@@ -3,6 +3,7 @@ package metrics
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"strconv"
 )
 
 const aggregatorNamespace = "aggregator"
@@ -13,6 +14,8 @@ type CacheMetrics struct {
 	Hits   prometheus.Counter
 	Misses prometheus.Counter
 }
+
+var aggregatorIdCount = 0
 
 func NewCacheMetrics(namespace string, labels prometheus.Labels) *CacheMetrics {
 	cm := CacheMetrics{}
@@ -31,9 +34,10 @@ func NewCacheMetrics(namespace string, labels prometheus.Labels) *CacheMetrics {
 }
 
 type AggregatorMetrics struct {
-	Cache                   *CacheMetrics
-	Dropped                 prometheus.Counter
-	Matched                 *prometheus.CounterVec
+	Cache   *CacheMetrics
+	Dropped prometheus.Counter
+	Matched *prometheus.CounterVec
+	prometheus.Gauge
 	lowestTimestampCounter  prometheus.Gauge
 	highestTimestampCounter prometheus.Gauge
 	highTs                  uint32
@@ -48,7 +52,12 @@ func NewAggregatorMetrics(id string, labels prometheus.Labels) *AggregatorMetric
 	if labels == nil {
 		labels = prometheus.Labels{}
 	}
-	labels["id"] = id
+	if id == "" {
+		labels["id"] = strconv.Itoa(aggregatorIdCount)
+		aggregatorIdCount++
+	} else {
+		labels["id"] = id
+	}
 
 	am.Cache = NewCacheMetrics(namespace, labels)
 	am.Dropped = promauto.NewCounter(prometheus.CounterOpts{

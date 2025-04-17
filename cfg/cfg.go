@@ -56,8 +56,8 @@ type Aggregation struct {
 	Interval             int
 	Wait                 int
 	DropRaw              bool
-	ExposeMatchedMetrics bool `toml:"exposed_matched_metrics,omitempty"`
-	MatchedMetricPath    uint `toml:"matched_metric_path,omitempty"`
+	ExposeMatchedMetrics bool
+	MatchedMetricPath    uint
 }
 
 type Route struct {

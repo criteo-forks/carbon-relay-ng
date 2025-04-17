@@ -186,11 +186,25 @@ func (a *Aggregator) Shutdown() {
 	a.wg.Wait()
 }
 
-func (a *Aggregator) IncrementMetric(key string) {
-	path := strings.Split(key, ".")
-	if uint(len(path)) > a.matchedMetricPathIndex {
-		a.am.Matched.WithLabelValues(path[a.matchedMetricPathIndex]).Inc()
+func getStringIndex(key string, index uint) string {
+	start := 0
+	for i := uint(0); i < index; i++ {
+		pos := strings.IndexByte(key[start:], '.')
+		if pos == -1 {
+			return ""
+		}
+		start += pos + 1
 	}
+
+	end := strings.IndexByte(key[start:], '.')
+	if end == -1 {
+		return key[start:]
+	}
+	return key[start : start+end]
+}
+
+func (a *Aggregator) IncrementMetric(key string) {
+	a.am.Matched.WithLabelValues(getStringIndex(key, a.matchedMetricPathIndex)).Inc()
 }
 
 func (a *Aggregator) AddMaybe(dp encoding.Datapoint) bool {
