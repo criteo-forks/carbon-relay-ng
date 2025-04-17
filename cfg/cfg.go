@@ -47,15 +47,17 @@ func (d *Duration) UnmarshalText(text []byte) error {
 }
 
 type Aggregation struct {
-	Function string
-	Regex    string
-	Prefix   string
-	Substr   string
-	Format   string
-	Cache    bool
-	Interval int
-	Wait     int
-	DropRaw  bool
+	Function             string
+	Regex                string
+	Prefix               string
+	Substr               string
+	Format               string
+	Cache                bool
+	Interval             int
+	Wait                 int
+	DropRaw              bool
+	ExposeMatchedMetrics bool
+	MatchedMetricPath    uint
 }
 
 type Route struct {

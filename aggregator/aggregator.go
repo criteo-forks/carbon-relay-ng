@@ -15,32 +15,37 @@ import (
 )
 
 type Aggregator struct {
-	Fun          string `json:"fun"`
-	procConstr   func(val float64, ts uint32) Processor
-	in           chan encoding.Datapoint `json:"-"` // incoming metrics, already split in 3 fields
-	out          chan encoding.Datapoint // outgoing metrics
-	Regex        string                  `json:"regex,omitempty"`
-	Prefix       string                  `json:"prefix,omitempty"`
-	Sub          string                  `json:"substring,omitempty"`
-	regex        *regexp.Regexp          // compiled version of Regex
-	prefix       []byte                  // automatically generated based on Prefix or regex, for fast preMatch
-	substring    []byte                  // based on Sub, for fast preMatch
-	OutFmt       string
-	outFmt       []byte
-	Cache        bool
-	reCache      map[string]CacheEntry
-	reCacheMutex sync.Mutex
-	Interval     uint                 // expected interval between values in seconds, we will quantize to make sure alginment to interval-spaced timestamps
-	Wait         uint                 // seconds to wait after quantized time value before flushing final outcome and ignoring future values that are sent too late.
-	DropRaw      bool                 // drop raw values "consumed" by this aggregator
-	aggregations map[aggkey]Processor // aggregations in process: one for each quantized timestamp and output key, i.e. for each output metric.
-	snapReq      chan bool            // chan to issue snapshot requests on
-	snapResp     chan *Aggregator     // chan on which snapshot response gets sent
-	shutdown     chan struct{}        // chan used internally to shut down
-	wg           sync.WaitGroup       // tracks worker running state
-	now          func() time.Time     // returns current time. wraps time.Now except in some unit tests
-	tick         <-chan time.Time     // controls when to flush
-	am           *metrics.AggregatorMetrics
+	Fun                    string `json:"fun"`
+	procConstr             func(val float64, ts uint32) Processor
+	in                     chan encoding.Datapoint `json:"-"` // incoming metrics, already split in 3 fields
+	out                    chan encoding.Datapoint // outgoing metrics
+	Regex                  string                  `json:"regex,omitempty"`
+	Prefix                 string                  `json:"prefix,omitempty"`
+	Sub                    string                  `json:"substring,omitempty"`
+	regex                  *regexp.Regexp          // compiled version of Regex
+	prefix                 []byte                  // automatically generated based on Prefix or regex, for fast preMatch
+	substring              []byte                  // based on Sub, for fast preMatch
+	OutFmt                 string
+	outFmt                 []byte
+	Cache                  bool
+	reCache                map[string]CacheEntry
+	reCacheMutex           sync.Mutex
+	Interval               uint                 // expected interval between values in seconds, we will quantize to make sure alginment to interval-spaced timestamps
+	Wait                   uint                 // seconds to wait after quantized time value before flushing final outcome and ignoring future values that are sent too late.
+	DropRaw                bool                 // drop raw values "consumed" by this aggregator
+	aggregations           map[aggkey]Processor // aggregations in process: one for each quantized timestamp and output key, i.e. for each output metric.
+	snapReq                chan bool            // chan to issue snapshot requests on
+	snapResp               chan *Aggregator     // chan on which snapshot response gets sent
+	shutdown               chan struct{}        // chan used internally to shut down
+	wg                     sync.WaitGroup       // tracks worker running state
+	now                    func() time.Time     // returns current time. wraps time.Now except in some unit tests
+	tick                   <-chan time.Time     // controls when to flush
+	am                     *metrics.AggregatorMetrics
+	exposeMatchedMetrics   bool `json:"expose_matched_metrics"`    // if a metric should expose the number of input is matched
+	matchedMetricPathIndex uint `json:"matched_metric_path_index"` // this flag controls what is part of the path is exposed
+	// in the metric:
+	// for instance if set to 2
+	// my.metric.path.key.value will expose "path"
 }
 
 // regexToPrefix inspects the regex and returns the longest static prefix part of the regex
@@ -72,11 +77,11 @@ func regexToPrefix(regex string) []byte {
 }
 
 // New creates an aggregator
-func New(fun, regex, prefix, sub, outFmt string, cache bool, interval, wait uint, dropRaw bool, out chan encoding.Datapoint) (*Aggregator, error) {
-	return NewMocked(fun, regex, prefix, sub, outFmt, cache, interval, wait, dropRaw, out, 2000, time.Now, clock.AlignedTick(time.Duration(interval)*time.Second))
+func New(fun, regex, prefix, sub, outFmt string, cache bool, interval, wait uint, dropRaw bool, out chan encoding.Datapoint, exposeMetrics bool, exposeMetricIndex uint) (*Aggregator, error) {
+	return NewMocked(fun, regex, prefix, sub, outFmt, cache, interval, wait, dropRaw, out, 2000, time.Now, clock.AlignedTick(time.Duration(interval)*time.Second), exposeMetrics, exposeMetricIndex)
 }
 
-func NewMocked(fun, regex, prefix, sub, outFmt string, cache bool, interval, wait uint, dropRaw bool, out chan encoding.Datapoint, inBuf int, now func() time.Time, tick <-chan time.Time) (*Aggregator, error) {
+func NewMocked(fun, regex, prefix, sub, outFmt string, cache bool, interval, wait uint, dropRaw bool, out chan encoding.Datapoint, inBuf int, now func() time.Time, tick <-chan time.Time, exposeMetrics bool, exposeMetricIndex uint) (*Aggregator, error) {
 	regexObj, err := regexp.Compile(regex)
 	if err != nil {
 		return nil, err
@@ -87,27 +92,29 @@ func NewMocked(fun, regex, prefix, sub, outFmt string, cache bool, interval, wai
 	}
 
 	a := &Aggregator{
-		Fun:          fun,
-		procConstr:   procConstr,
-		in:           make(chan encoding.Datapoint, inBuf),
-		out:          out,
-		Regex:        regex,
-		Sub:          sub,
-		regex:        regexObj,
-		substring:    []byte(sub),
-		OutFmt:       outFmt,
-		outFmt:       []byte(outFmt),
-		Cache:        cache,
-		Interval:     interval,
-		Wait:         wait,
-		DropRaw:      dropRaw,
-		aggregations: make(map[aggkey]Processor),
-		snapReq:      make(chan bool),
-		snapResp:     make(chan *Aggregator),
-		shutdown:     make(chan struct{}),
-		now:          now,
-		tick:         tick,
-		am:           metrics.NewAggregatorMetrics(prefix, nil),
+		Fun:                    fun,
+		procConstr:             procConstr,
+		in:                     make(chan encoding.Datapoint, inBuf),
+		out:                    out,
+		Regex:                  regex,
+		Sub:                    sub,
+		regex:                  regexObj,
+		substring:              []byte(sub),
+		OutFmt:                 outFmt,
+		outFmt:                 []byte(outFmt),
+		Cache:                  cache,
+		Interval:               interval,
+		Wait:                   wait,
+		DropRaw:                dropRaw,
+		aggregations:           make(map[aggkey]Processor),
+		snapReq:                make(chan bool),
+		snapResp:               make(chan *Aggregator),
+		shutdown:               make(chan struct{}),
+		now:                    now,
+		tick:                   tick,
+		am:                     metrics.NewAggregatorMetrics(prefix, nil),
+		exposeMatchedMetrics:   exposeMetrics,
+		matchedMetricPathIndex: exposeMetricIndex,
 	}
 	if prefix != "" {
 		a.prefix = []byte(prefix)
@@ -177,6 +184,27 @@ func (a *Aggregator) Flush(ts uint) {
 func (a *Aggregator) Shutdown() {
 	close(a.shutdown)
 	a.wg.Wait()
+}
+
+func getStringIndex(key string, index uint) string {
+	start := 0
+	for i := uint(0); i < index; i++ {
+		pos := strings.IndexByte(key[start:], '.')
+		if pos == -1 {
+			return ""
+		}
+		start += pos + 1
+	}
+
+	end := strings.IndexByte(key[start:], '.')
+	if end == -1 {
+		return key[start:]
+	}
+	return key[start : start+end]
+}
+
+func (a *Aggregator) IncrementMetric(key string) {
+	a.am.Matched.WithLabelValues(getStringIndex(key, a.matchedMetricPathIndex)).Inc()
 }
 
 func (a *Aggregator) AddMaybe(dp encoding.Datapoint) bool {
@@ -276,6 +304,9 @@ func (a *Aggregator) run() {
 			outKey, ok := a.matchWithCacheString(msg.Name)
 			if !ok {
 				continue
+			}
+			if a.exposeMatchedMetrics {
+				a.IncrementMetric(outKey)
 			}
 			//TODO: m.conraux Remove int casting logic
 			ts := uint(msg.Timestamp)

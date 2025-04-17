@@ -1,6 +1,7 @@
 package aggregator
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -291,7 +292,7 @@ func benchmarkAggregator(aggregates, pointsPerAggregate int, match string, cache
 	clock.AddTick(tick)
 	bufSize := 2 * aggregates * pointsPerAggregate
 
-	agg, err := NewMocked("sum", regex, "", "", outFmt, cache, 10, 30, false, out, bufSize, clock.Now, tick.C)
+	agg, err := NewMocked("sum", regex, "", "", outFmt, cache, 10, 30, false, out, bufSize, clock.Now, tick.C, true, 0)
 	if err != nil {
 		b.Fatalf("couldn't create aggregation: %q", err)
 	}
@@ -337,5 +338,37 @@ func benchmarkAggregator(aggregates, pointsPerAggregate int, match string, cache
 			lastFlushTs += 10
 			time.Sleep(10 * time.Microsecond)
 		}
+	}
+}
+
+func TestGetStringIndex(t *testing.T) {
+	tests := []struct {
+		key      string
+		index    uint
+		expected string
+	}{
+		{"foo.bar.baz", 0, "foo"},
+		{"foo.bar.baz", 1, "bar"},
+		{"foo.bar.baz", 2, "baz"},
+		{"foo.bar.baz", 3, ""},
+		{"one.two.three.four", 2, "three"},
+		{"justone", 0, "justone"},
+		{"justone", 1, ""},
+		{"", 0, ""},
+		{".starting.dot", 0, ""},
+		{".starting.dot", 1, "starting"},
+		{"ending.dot.", 2, ""},
+		{"double..dot", 1, ""},
+		{"multiple.dots.in.a.row", 4, "row"},
+		{"multiple.dots.in.a.row", 5, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%q[%d]", tt.key, tt.index), func(t *testing.T) {
+			result := getStringIndex(tt.key, tt.index)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
 	}
 }
