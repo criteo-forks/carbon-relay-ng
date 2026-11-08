@@ -10,7 +10,7 @@ func AlignedTick(period time.Duration) <-chan time.Time {
 	// note that time.Ticker is not an interface,
 	// and that if we instantiate one, we can't write to its channel
 	// hence we can't leverage that type.
-	c := make(chan time.Time)
+	c := make(chan time.Time, 1)
 	go func() {
 		for {
 			unix := time.Now().UnixNano()
